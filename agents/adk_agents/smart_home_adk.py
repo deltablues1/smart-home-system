@@ -38,6 +38,7 @@ def create_smart_home_agent(
     if os.getenv("HA_URL", "").strip() and os.getenv("HA_TOKEN", "").strip():
         from tools.adk_tools.ha_adk_tools import get_ha_adk_tools
         from tools.adk_tools.ha_sensor_tools import get_ha_sensor_tools
+        from tools.adk_tools.ha_insight_tools import get_ha_insight_tools
         from tools.adk_tools.ha_shopping_tools import get_shopping_list_tools
         # Sklopke idu preko MQTT-a, ali mjerenja (temperatura, vlaga, tlak,
         # kvaliteta zraka, potrošnja) postoje samo u HA — bez ovih read-only
@@ -50,10 +51,13 @@ def create_smart_home_agent(
             tools
             + get_ha_adk_tools()
             + get_ha_sensor_tools()
+            # Everything else Home Assistant knows, read-only: rooms, any
+            # entity's history, the logbook, statistics, its own logs.
+            + get_ha_insight_tools()
             + get_shopping_list_tools()
         )
         logger.info(
-            "Smart Home agent: Home Assistant TV + sensor + shopping list tools enabled"
+            "Smart Home agent: Home Assistant TV + sensor + insight + shopping list tools enabled"
         )
 
     agent = create_adk_agent(
@@ -70,6 +74,9 @@ def create_smart_home_agent(
             "switch channels by name or number, play from YouTube, remote keys. "
             "Reads sensors: temperature, humidity, pressure per room, air quality, "
             "power consumption, and their history (daily min/max/average). "
+            "Knows everything Home Assistant knows, read-only: what is on in each "
+            "room, any device's history, the logbook, consumption per day, and "
+            "Home Assistant's own errors, logs and health. "
             "Also owns the household SHOPPING LIST (lista za kupovinu, popis za "
             "ducan): add items, show it, mark them bought, put one back, remove "
             "them, and mark everything bought except named items."

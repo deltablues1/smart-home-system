@@ -30,6 +30,7 @@ onoga što radi na Piju.
 | *„Sutra u 7 upali TV i pusti neku pjesmu"* | Posao se zapiše, a servis za raspored ga u 7:00 izvrši u vlastitoj sesiji. |
 | *„Istraži dizalice topline do 12 kW, napravi dokument i pošalji ga Ani"* | Planer to rastavi na korake: istraživanje → izvještaj → Google dokument → traženje kontakta → mail. Mail na adresu na koju kuća nikad nije pisala čeka tvoje „da". |
 | *„Tko je bio Nikola Tesla?"* | Brzi agent bez alata odgovori za 2,5 s. Zahtjeve kojima trebaju alati prosljeđuje dalje. |
+| *„Ima li grešaka u Home Assistantu i što se događalo dok me nije bilo?"* | Pročita log i logbook samog Home Assistanta, samo za čitanje, i sažme ih u lokalnom vremenu. |
 | Fotografija računa na Telegramu | Podaci se izvuku Gemini vizijom i sažmu u odgovoru. |
 
 ---
@@ -121,7 +122,7 @@ deploy/home_assistant/   vlastita integracija, generator dashboarda, teme, JS mo
 deploy/tv_app_launcher/  pomoćna Android TV aplikacija
 esphome/                 ESP32 senzorski čvor i komponenta za mjerenje snage
 docs/                    dokumentacija na engleskom i hrvatskom
-tests/unit/              1.450 testova
+tests/unit/              1.486 testova
 ```
 
 ---
@@ -143,7 +144,11 @@ OpenAI. Sve postavke su u [`.env.example`](.env.example).
 
 ### Provjera ove snimke (2026-09-13)
 
-- Prolazi 1.450 unit testova (4 preskočena na Windowsu jer su samo za Unix).
+- Prolazi 1.486 unit testova (4 preskočena na Windowsu jer su samo za Unix).
+- Alati samo za čitanje iz Home Assistanta isprobani su na živom Home
+  Assistantu (205 entiteta, 10 prostorija): pregled po sobama, povijest
+  uređaja, logbook, statistika potrošnje, log i zdravlje sustava odgovorili su
+  iz stvarnih podataka.
 - Snimka je pokrenuta na produkcijskom Piju pokraj živih servisa, na zasebnim
   portovima:
   - Svih pet ulaznih točaka se pokreće. Web API učitava 15 agenata.

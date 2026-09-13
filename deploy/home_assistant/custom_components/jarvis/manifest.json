@@ -1,0 +1,15 @@
+{
+  "domain": "jarvis",
+  "name": "Jarvis",
+  "version": "1.0.0",
+  "documentation": "https://github.com/deltablues1/smart-home-system",
+  "issue_tracker": "https://github.com/deltablues1/smart-home-system/issues",
+  "codeowners": [],
+  "config_flow": true,
+  "dependencies": [
+    "conversation"
+  ],
+  "integration_type": "service",
+  "iot_class": "local_polling",
+  "requirements": []
+}

@@ -121,11 +121,41 @@ Detailed wiring and the design notebook, in Croatian:
 
 ---
 
-## ESP32 I/O node
+## ESP32 I/O node (`esphome/esp32-io.yaml`)
 
-Relays for 15 lights, 14 sockets and the boiler, a dimmer, and 16 wall
-push-buttons. Home Assistant talks to it over the native ESPHome API; Jarvis
-talks to it over MQTT, which makes the two paths fail independently
+The switchboard of the house: three MCP23017 I/O expanders on one I²C bus.
+
+| Expander | Address | Carries |
+|----------|---------|---------|
+| `mcp_lights` | `0x20` | 15 light relays and one spare |
+| `mcp_outlets` | `0x22` | 14 socket relays (including the boiler, the oven and two spares) and two PIR inputs |
+| `mcp_buttons` | `0x27` | 16 wall push-buttons |
+
+The armchair light is dimmed by PWM straight from GPIO13.
+
+Home Assistant talks to the node over the encrypted native ESPHome API; Jarvis
+talks to it over MQTT, with a birth and last-will message on
+`esp32-io/status`. The two paths fail independently
 ([the incident](engineering-notes.md#three-days-of-u-redu-to-a-device-that-was-not-there)).
 
-> Its ESPHome configuration is not yet in this repository.
+Logic that lives on the ESP32, so it keeps working when every Pi is off:
+
+- **Push-buttons.** A short press toggles the light. Holding any button for 5 s
+  turns every light off. A double click on the armchair button steps its
+  brightness through 25, 50, 75 and 100 %.
+- **Bathroom–boiler interlock with memory.** Switching the bathroom light on
+  remembers whether the boiler was on and switches it off. Switching the light
+  off brings the boiler back only if it was on before. The boiler also refuses
+  to switch on while the bathroom light is on.
+- **Motion lights with manual override.** Outside and at the entrance a PIR
+  switches the light on for 60 s or 30 s. A light switched on by hand is left
+  alone when the timer runs out. (The PIR inputs ship disabled.)
+- **Safe power-up.** Every relay comes back off after a power cut.
+
+Diagnostics added after the three-day MQTT outage, so a reboot can be told
+apart from a lost connection: Wi-Fi signal, uptime, chip temperature, free
+memory, loop time, IP address and the reason for the last reset, plus restart
+and safe-mode buttons.
+
+All credentials (Wi-Fi, API encryption key, MQTT, OTA, web server) come from
+ESPHome's `secrets.yaml`, which is not in the repository.

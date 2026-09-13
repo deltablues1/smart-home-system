@@ -1,0 +1,37 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Jarvis",
+        "description": "Poveži Home Assistant s Jarvisom da može odgovarati kroz Assist.",
+        "data": {
+          "url": "Adresa Jarvisa",
+          "token": "API token",
+          "user_id": "Oznaka korisnika koja se šalje uz zahtjev",
+          "timeout": "Vremensko ograničenje (sekunde)"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Ne mogu doći do Jarvisa na toj adresi.",
+      "invalid_auth": "Jarvis je odbio token."
+    },
+    "abort": {
+      "already_configured": "Taj Jarvis je već dodan."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Trajanja glasa",
+        "description": "Koliko Assist strpljivo čeka. Duža pauza znači da smiješ zastati usred rečenice bez prekidanja, ali odgovor kreće za toliko kasnije.",
+        "data": {
+          "silence_seconds": "Pauza prije kraja izgovora (sekunde)",
+          "max_turn_seconds": "Najdulje trajanje jednog izgovora (sekunde)",
+          "timeout": "Koliko se čeka Jarvisov odgovor (sekunde)",
+          "session_grace_minutes": "Nastavi prethodni razgovor još (minuta)"
+        }
+      }
+    }
+  }
+}

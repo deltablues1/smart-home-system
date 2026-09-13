@@ -27,6 +27,7 @@ Examples below are real requests, translated.
 | *"Sutra u 7 upali TV i pusti neku pjesmu"* — tomorrow at 7, turn on the TV and play a song | Written to the job store. The scheduler service runs it at 7:00 in its own session. |
 | *"Istraži dizalice topline do 12 kW, napravi dokument i pošalji ga Ani"* — research heat pumps, write it up, mail it to Ana | A planner splits this into research → report → Google Doc → contact lookup → email. Mail to an address the house has never used waits for your "da". |
 | *"Tko je bio Nikola Tesla?"* — who was Nikola Tesla? | A fast, tool-free agent answers in 2.5 s. Requests that need tools are escalated. |
+| *"Ima li grešaka u Home Assistantu i što se događalo dok me nije bilo?"* — any errors in Home Assistant, and what happened while I was away? | Reads Home Assistant's own log and logbook, read-only, and summarises them in local time. |
 | A photo of a receipt on Telegram | Extracted with Gemini vision and summarised back. |
 
 ---
@@ -115,7 +116,7 @@ deploy/home_assistant/   custom integration, dashboard generator, themes, JS mod
 deploy/tv_app_launcher/  Android TV helper app
 esphome/                 ESP32 sensor node and the power-measurement component
 docs/                    documentation in English and Croatian
-tests/unit/              1,450 tests
+tests/unit/              1,486 tests
 ```
 
 ---
@@ -137,7 +138,10 @@ Anthropic and OpenAI. All settings are in [`.env.example`](.env.example).
 
 ### Verification of this snapshot (2026-09-13)
 
-- 1,450 unit tests pass (4 skipped on Windows for Unix-only features).
+- 1,486 unit tests pass (4 skipped on Windows for Unix-only features).
+- The read-only Home Assistant tools were run against the live Home Assistant
+  (205 entities, 10 areas): room overview, device history, logbook, energy
+  statistics, log and health all answered from real data.
 - The snapshot ran on the production Pi next to the live services, on separate
   ports:
   - All five entry points start. The web API loads 15 agents.

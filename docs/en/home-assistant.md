@@ -96,6 +96,28 @@ casting). What was measured, not assumed:
 `tools/adk_tools/ha_shopping_tools.py` works on Home Assistant's `todo` entity:
 add, show, mark bought, remove, and "kupio sam sve osim mlijeka".
 
+### Everything else Home Assistant knows
+
+`tools/adk_tools/ha_insight_tools.py` gives the agent the rest of Home
+Assistant, read-only:
+
+| Tool | Answers |
+|------|---------|
+| `ha_house_overview` | what is on, open or playing in each room, and what is unavailable |
+| `ha_find_entities` | any entity by name, room, domain or state |
+| `ha_entity_details` | every attribute of one entity |
+| `ha_state_history` | when something switched on and off, and for how long |
+| `ha_logbook` | what happened in the house, newest first |
+| `ha_statistics` | long-term statistics; energy per hour, day, week or month |
+| `ha_system_log` | Home Assistant's own warnings and errors |
+| `ha_system_health` | version, failed integrations, unavailable entities, updates, log summary |
+
+The module never changes anything. REST is read with GET, the only POST renders
+a template, and WebSocket commands must pass an allow-list of four read
+commands. A test checks the module's source for exactly that, because the token
+that reads the logbook could also unlock a door. Home Assistant returns UTC; the
+tools answer in local time.
+
 ### Notifications
 
 Answers that outlive the Assist window arrive through `notify.<phone>`.

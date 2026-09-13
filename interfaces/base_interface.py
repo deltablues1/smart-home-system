@@ -72,6 +72,9 @@ SMART_HOME_KEYWORDS = {
     "na listu", "s liste", "na popis", "s popisa", "popis za kupovinu",
     "za kupovinu", "kupio sam", "kupila sam", "kupili smo", "za ducan",
     "za trgovinu", "sto trebam kupiti", "sta trebam kupiti",
+    # Everything Home Assistant knows is reached through the same agent:
+    # "ima li grešaka u home assistantu", "što javlja senzor", "potrošnja".
+    "home assistant", "senzor", "potrošnj", "potrosnj", "potrošil", "potrosil",
 }
 
 # Word-boundary match for the bare word "tv" ("upali tv", "tv u dnevnoj").
@@ -230,6 +233,36 @@ RESEARCH_VOICE_KEYWORDS = {
     "nedostat", "razlika izmedu", "sto je bolje", "sta je bolje",
     "preporuci", "koliko kosta", "koliko stoji",
 }
+
+# "Kolika je temperatura u kupaoni?" is a question for the sensor on the
+# bathroom wall, but "temperatur" is also a weather keyword, and the weather
+# lane is checked before the device lanes -- so it answered with the Zagreb
+# forecast. Measured 2026-09-13 on the Pi. A measurement word next to a place in
+# the house, a consumption word, or a question about the past sends the request
+# to the house's own sensors instead. Matched against _normalize_voice_text
+# output, so ASCII-folded stems only.
+HOME_SENSOR_MEASURE_STEMS = (
+    "temperatur", "stupnj", "toplo", "hladno", "vlag", "tlak", "zrak", "cestic",
+    "prasin", "potrosnj", "potrosil", "potrosen", "struj", "snag", "napon",
+    "kilovat", "kwh",
+)
+HOME_SENSOR_CONSUMPTION_STEMS = (
+    "potrosnj", "potrosil", "potrosen", "struj", "snag", "napon", "kilovat", "kwh",
+)
+# Whole words: "osoba" contains "soba".
+_HOME_SENSOR_PLACE_RE = re.compile(
+    r"\b(kupaon\w*|sob[aeiu]|sobom|boravk\w*|dnevn\w*|kuhinj\w*|hodnik\w*|"
+    r"ulaz\w*|blag[ao]vaon\w*|teras\w*|kat[au]?|prizemlj\w*|kuci|doma|unutra|"
+    r"senzor\w*)\b"
+)
+HOME_SENSOR_HISTORY_CUES = (
+    "bila", "bilo", "bio ", "jucer", "prosjek", "najvis", "najniz", "izmjer",
+    "zabiljez", "ovaj tjedan", "prosli tjedan", "ovaj mjesec",
+)
+# Future and forecast wording keeps a question on the weather lane.
+HOME_SENSOR_FORECAST_CUES = (
+    "prognoz", "sutra", "prekosutra", "vikend", "bit ce", "hoce li", "ce biti",
+)
 
 
 # "Sutra ujutro u 7 upali TV i pusti neku pjesmu" is a SCHEDULING request
@@ -767,6 +800,19 @@ class BaseInterface(ABC):
         )
         return not any(m in msg for m in multi_step_markers)
 
+    def _looks_like_home_sensor_request(self, message: str) -> bool:
+        """A measurement question about this house, not about the weather."""
+        msg = self._normalize_voice_text(message)
+        if not any(stem in msg for stem in HOME_SENSOR_MEASURE_STEMS):
+            return False
+        if any(cue in msg for cue in HOME_SENSOR_FORECAST_CUES):
+            return False
+        if _HOME_SENSOR_PLACE_RE.search(msg):
+            return True
+        if any(stem in msg for stem in HOME_SENSOR_CONSUMPTION_STEMS):
+            return True
+        return any(cue in msg for cue in HOME_SENSOR_HISTORY_CUES)
+
     def _is_weather_request(self, message: str) -> bool:
         msg_lower = self._normalize_voice_text(message)
         if any(kw in msg_lower for kw in WEATHER_VOICE_KEYWORDS):
@@ -850,6 +896,11 @@ class BaseInterface(ABC):
         # a question that merely names a device is not a command for it.
         if self._looks_like_research_request(message):
             return ORCHESTRATOR_VOICE_ROUTE, None
+
+        # The house's own sensors BEFORE weather: "temperatura u kupaoni" also
+        # contains a weather keyword, and the weather lane used to take it.
+        if self._looks_like_home_sensor_request(message):
+            return "agent", "smart_home"
 
         # Weather AFTER the business check so mixed requests ("pošalji mail s
         # prognozom") still reach the orchestrator, but before every agent

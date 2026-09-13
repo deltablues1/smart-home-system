@@ -101,6 +101,30 @@ Izmjereno, ne pretpostavljeno:
 `tools/adk_tools/ha_shopping_tools.py` radi na Home Assistantovu `todo`
 entitetu: dodaj, pokaži, označi kupljeno, ukloni i „kupio sam sve osim mlijeka".
 
+### Sve ostalo što Home Assistant zna
+
+`tools/adk_tools/ha_insight_tools.py` agentu daje ostatak Home Assistanta, samo
+za čitanje:
+
+| Alat | Odgovara na |
+|------|-------------|
+| `ha_house_overview` | što je upaljeno, otvoreno ili svira po prostorijama i što je nedostupno |
+| `ha_find_entities` | bilo koji entitet po nazivu, prostoriji, vrsti ili stanju |
+| `ha_entity_details` | svi atributi jednog entiteta |
+| `ha_state_history` | kad se nešto palilo i gasilo i koliko je dugo radilo |
+| `ha_logbook` | što se događalo u kući, najnovije prvo |
+| `ha_statistics` | dugoročna statistika; energija po satu, danu, tjednu ili mjesecu |
+| `ha_system_log` | upozorenja i greške iz loga samog Home Assistanta |
+| `ha_system_health` | verzija, neučitane integracije, nedostupni entiteti, ažuriranja, sažetak loga |
+
+Modul nikad ništa ne mijenja:
+- REST se čita GET-om, a jedini POST samo iscrta predložak;
+- WebSocket naredbe moraju proći popis od četiri naredbe za čitanje.
+
+Test to provjerava na izvornom kodu modula, jer token koji čita logbook može i
+otključati vrata. Home Assistant vraća UTC, a alati odgovaraju u lokalnom
+vremenu.
+
 ### Obavijesti
 
 Odgovori koji nadžive Assist prozor stižu kroz `notify.<mobitel>`.

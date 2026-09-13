@@ -1,0 +1,37 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Jarvis",
+        "description": "Connect Home Assistant to the Jarvis multi-agent system so it can answer through Assist.",
+        "data": {
+          "url": "Jarvis URL",
+          "token": "API token",
+          "user_id": "User id sent with each request",
+          "timeout": "Timeout (seconds)"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Could not reach Jarvis at that address.",
+      "invalid_auth": "Jarvis rejected the token."
+    },
+    "abort": {
+      "already_configured": "This Jarvis instance is already configured."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Jarvis voice timing",
+        "description": "How patient Assist should be. A longer pause means you can think mid-sentence without being cut off, at the cost of that much delay before the answer starts.",
+        "data": {
+          "silence_seconds": "Pause before a turn ends (seconds)",
+          "max_turn_seconds": "Maximum length of one spoken turn (seconds)",
+          "timeout": "How long to wait for Jarvis's answer (seconds)",
+          "session_grace_minutes": "Continue the previous conversation for (minutes)"
+        }
+      }
+    }
+  }
+}

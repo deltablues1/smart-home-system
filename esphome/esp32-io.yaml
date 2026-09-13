@@ -1,0 +1,1101 @@
+substitutions:
+  node_name: esp32-io
+  friendly_name: ESP32 IO
+
+# === Wi-Fi (STA + AP fallback) ===
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+  power_save_mode: none
+  fast_connect: true
+  manual_ip:
+    static_ip: 192.168.100.100
+    gateway: 192.168.100.1
+    subnet: 255.255.255.0
+    dns1: 192.168.100.1
+  ap:
+    ssid: "${friendly_name} Fallback"
+    password: !secret wifi_ap_password
+
+captive_portal:
+
+esphome:
+  name: ${node_name}
+  friendly_name: ${friendly_name}
+
+esp32:
+  board: esp32dev
+  framework:
+    type: arduino
+
+# === LOGGER (PRODUCTION default: INFO) ===
+logger:
+  level: DEBUG  # Revert to INFO in production.
+
+# === API s ENCRYPTION (SECURITY) ===
+api:
+  reboot_timeout: 0s
+  encryption:
+    key: !secret api_encryption_key
+
+# === MQTT BROKER (za agent sustav) ===
+mqtt:
+  broker: !secret mqtt_broker
+  username: !secret mqtt_user
+  password: !secret mqtt_password
+  discovery: true
+  topic_prefix: esp32-io
+  birth_message:
+    topic: esp32-io/status
+    payload: online
+  will_message:
+    topic: esp32-io/status
+    payload: offline
+  log_topic:
+    topic: esp32-io/log
+    level: WARN
+
+ota:
+  - platform: esphome
+    password: !secret ota_password
+  - platform: web_server
+
+# === WEB SERVER (secured with HTTP basic auth) ===
+# Add these keys to secrets.yaml if missing:
+#   web_server_username: "your_user"
+#   web_server_password: "your_strong_password"
+web_server:
+  port: 80
+  auth:
+    username: !secret web_server_username
+    password: !secret web_server_password
+
+# === I²C BUS (za MCP23017 expandere) ===
+i2c:
+  sda: GPIO21
+  scl: GPIO22
+  scan: true
+  frequency: 400kHz
+
+# === MCP23017 I/O EXPANDERI ===
+mcp23017:
+  - id: mcp_lights
+    address: 0x20
+    # Samo outputi (svjetla)
+
+  - id: mcp_outlets
+    address: 0x22
+    # Outputi (utičnice) + PIR inputi
+
+  - id: mcp_buttons
+    address: 0x27
+    # Samo inputi (tipkala)
+
+# === GLOBALS - pamćenje stanja kroz power cycle ===
+globals:
+  - id: bojler_was_on
+    type: bool
+    restore_value: yes
+    initial_value: 'false'
+
+  # PIR manual override flags
+  - id: pir_vani_manual
+    type: bool
+    restore_value: yes
+    initial_value: 'false'
+
+  - id: pir_ulaz_manual
+    type: bool
+    restore_value: yes
+    initial_value: 'false'
+
+  # PIR guard flags (prevent PIR from setting manual mode)
+  - id: pir_vani_in_progress
+    type: bool
+    restore_value: no
+    initial_value: 'false'
+
+  - id: pir_ulaz_in_progress
+    type: bool
+    restore_value: no
+    initial_value: 'false'
+
+  # Brightness step za fotelju (1=25%, 2=50%, 3=75%, 4=100%)
+  - id: fotelja_brightness_step
+    type: int
+    restore_value: yes
+    initial_value: '4'
+
+# === LEDC PWM OUTPUT (za dimabilno svjetlo fotelje) ===
+output:
+  - platform: ledc
+    pin: GPIO13
+    id: pwm_fotelja
+    frequency: 1000Hz
+
+# === DIMABILNO SVJETLO ===
+light:
+  - platform: monochromatic
+    name: "svjetlo_fotelja"
+    output: pwm_fotelja
+    id: svjetlo_fotelja_dim
+    restore_mode: RESTORE_DEFAULT_OFF
+    default_transition_length: 0.5s
+
+# === SCRIPTS ===
+script:
+  # Gasi SVA svjetla (IZMIJENJENO - utičnice ostaju netaknute)
+  - id: all_off
+    mode: restart
+    then:
+      # Svjetla
+      - switch.turn_off: svjetlo_vani
+      - switch.turn_off: svjetlo_terasa1
+      - switch.turn_off: svjetlo_terasa2
+      - switch.turn_off: svjetlo_ulaz
+      - switch.turn_off: svjetlo_hidrofor
+      - switch.turn_off: svjetlo_tv
+      - light.turn_off: svjetlo_fotelja_dim
+      - switch.turn_off: svjetlo_stup
+      - switch.turn_off: svjetlo_boravak
+      - switch.turn_off: svjetlo_blagavaona
+      - switch.turn_off: svjetlo_kuhinja
+      - switch.turn_off: svjetlo_sank
+      - switch.turn_off: svjetlo_hodnik
+      - switch.turn_off: svjetlo_kupaona
+      - switch.turn_off: svjetlo_soba1
+      - switch.turn_off: svjetlo_soba2
+      # Reset PIR manual override
+      - globals.set:
+          id: pir_vani_manual
+          value: 'false'
+      - globals.set:
+          id: pir_ulaz_manual
+          value: 'false'
+      - logger.log:
+          format: "all_off executed -> svjetla OFF + PIR manual override reset"
+          level: DEBUG
+
+  # PIR timeri s manual override (mode: restart = svaki novi pokret resetira timer)
+  - id: pir_vani_timer
+    mode: restart
+    then:
+      # Postavi guard flag prije paljenja (sprječava postavljanje manual=true)
+      - globals.set:
+          id: pir_vani_in_progress
+          value: 'true'
+      - switch.turn_on: svjetlo_vani
+      # Odmah vrati guard flag na false
+      - globals.set:
+          id: pir_vani_in_progress
+          value: 'false'
+      - delay: 60s
+      # Gasi svjetlo samo ako NIJE ručno upaljeno
+      - if:
+          condition:
+            lambda: 'return !id(pir_vani_manual);'
+          then:
+            - switch.turn_off: svjetlo_vani
+            - logger.log:
+                format: "PIR vani timeout -> gašenje svjetla"
+                level: DEBUG
+          else:
+            - logger.log:
+                format: "PIR vani timeout -> svjetlo ostaje ON (manual override)"
+                level: DEBUG
+
+  - id: pir_ulaz_timer
+    mode: restart
+    then:
+      # Postavi guard flag prije paljenja
+      - globals.set:
+          id: pir_ulaz_in_progress
+          value: 'true'
+      - switch.turn_on: svjetlo_ulaz
+      # Odmah vrati guard flag na false
+      - globals.set:
+          id: pir_ulaz_in_progress
+          value: 'false'
+      - delay: 30s
+      # Gasi svjetlo samo ako NIJE ručno upaljeno
+      - if:
+          condition:
+            lambda: 'return !id(pir_ulaz_manual);'
+          then:
+            - switch.turn_off: svjetlo_ulaz
+            - logger.log:
+                format: "PIR ulaz timeout -> gašenje svjetla"
+                level: DEBUG
+          else:
+            - logger.log:
+                format: "PIR ulaz timeout -> svjetlo ostaje ON (manual override)"
+                level: DEBUG
+
+  # Dupli klik na tipkalo fotelje -> ciklus svjetline (25% -> 50% -> 75% -> 100% -> 25%)
+  - id: fotelja_dim_step
+    mode: restart
+    then:
+      - lambda: |-
+          int step = id(fotelja_brightness_step) + 1;
+          if (step > 4) step = 1;
+          id(fotelja_brightness_step) = step;
+          float brightness = step * 0.25f;
+          auto call = id(svjetlo_fotelja_dim).turn_on();
+          call.set_brightness(brightness);
+          call.perform();
+          ESP_LOGD("fotelja", "Brightness step %d -> %.0f%%", step, brightness * 100);
+
+# ============================================================================
+# SWITCH - SVJETLA I UTIČNICE
+# ============================================================================
+switch:
+  # ===== SVJETLA (MCP 0x20 - mcp_lights) =====
+  - platform: gpio
+    id: svjetlo_vani
+    name: "svjetlo_vani"
+    restore_mode: RESTORE_DEFAULT_OFF
+    pin:
+      mcp23xxx: mcp_lights
+      number: 0
+      mode:
+        output: true
+    inverted: false
+    # PIR manual override (ISPRAVLJENO - ne okida se kad PIR pali)
+    on_turn_on:
+      then:
+        # Postavi manual SAMO ako nije PIR-paljenje
+        - if:
+            condition:
+              lambda: 'return !id(pir_vani_in_progress);'
+            then:
+              - globals.set:
+                  id: pir_vani_manual
+                  value: 'true'
+              - logger.log:
+                  format: "svjetlo_vani manual ON -> PIR override aktivan"
+                  level: DEBUG
+            else:
+              - logger.log:
+                  format: "svjetlo_vani ON from PIR -> manual override NOT set"
+                  level: DEBUG
+    on_turn_off:
+      then:
+        - globals.set:
+            id: pir_vani_manual
+            value: 'false'
+        - logger.log:
+            format: "svjetlo_vani manual OFF -> PIR ponovno aktivan"
+            level: DEBUG
+
+  - platform: gpio
+    id: svjetlo_terasa1
+    name: "svjetlo_terasa1"
+    restore_mode: RESTORE_DEFAULT_OFF
+    pin:
+      mcp23xxx: mcp_lights
+      number: 1
+      mode:
+        output: true
+    inverted: false
+
+  - platform: gpio
+    id: svjetlo_terasa2
+    name: "svjetlo_terasa2"
+    restore_mode: RESTORE_DEFAULT_OFF
+    pin:
+      mcp23xxx: mcp_lights
+      number: 2
+      mode:
+        output: true
+    inverted: false
+
+  - platform: gpio
+    id: svjetlo_ulaz
+    name: "svjetlo_ulaz"
+    restore_mode: RESTORE_DEFAULT_OFF
+    pin:
+      mcp23xxx: mcp_lights
+      number: 3
+      mode:
+        output: true
+    inverted: false
+    # PIR manual override (ISPRAVLJENO - ne okida se kad PIR pali)
+    on_turn_on:
+      then:
+        # Postavi manual SAMO ako nije PIR-paljenje
+        - if:
+            condition:
+              lambda: 'return !id(pir_ulaz_in_progress);'
+            then:
+              - globals.set:
+                  id: pir_ulaz_manual
+                  value: 'true'
+              - logger.log:
+                  format: "svjetlo_ulaz manual ON -> PIR override aktivan"
+                  level: DEBUG
+            else:
+              - logger.log:
+                  format: "svjetlo_ulaz ON from PIR -> manual override NOT set"
+                  level: DEBUG
+    on_turn_off:
+      then:
+        - globals.set:
+            id: pir_ulaz_manual
+            value: 'false'
+        - logger.log:
+            format: "svjetlo_ulaz manual OFF -> PIR ponovno aktivan"
+            level: DEBUG
+
+  - platform: gpio
+    id: svjetlo_hidrofor
+    name: "svjetlo_hidrofor"
+    restore_mode: RESTORE_DEFAULT_OFF
+    pin:
+      mcp23xxx: mcp_lights
+      number: 4
+      mode:
+        output: true
+    inverted: false
+
+  - platform: gpio
+    id: svjetlo_tv
+    name: "svjetlo_tv"
+    restore_mode: RESTORE_DEFAULT_OFF
+    pin:
+      mcp23xxx: mcp_lights
+      number: 5
+      mode:
+        output: true
+    inverted: false
+
+  # MCP pin 6 - rezerva (fotelj prebačen na GPIO13 PWM)
+  - platform: gpio
+    id: rezerva_fotelja_mcp
+    name: "rezerva_fotelja_mcp"
+    restore_mode: RESTORE_DEFAULT_OFF
+    disabled_by_default: true
+    pin:
+      mcp23xxx: mcp_lights
+      number: 6
+      mode:
+        output: true
+    inverted: false
+
+  - platform: gpio
+    id: svjetlo_stup
+    name: "svjetlo_stup"
+    restore_mode: RESTORE_DEFAULT_OFF
+    pin:
+      mcp23xxx: mcp_lights
+      number: 7
+      mode:
+        output: true
+    inverted: false
+
+  - platform: gpio
+    id: svjetlo_boravak
+    name: "svjetlo_boravak"
+    restore_mode: RESTORE_DEFAULT_OFF
+    pin:
+      mcp23xxx: mcp_lights
+      number: 8
+      mode:
+        output: true
+    inverted: false
+
+  - platform: gpio
+    id: svjetlo_blagavaona
+    name: "svjetlo_blagavaona"
+    restore_mode: RESTORE_DEFAULT_OFF
+    pin:
+      mcp23xxx: mcp_lights
+      number: 9
+      mode:
+        output: true
+    inverted: false
+
+  - platform: gpio
+    id: svjetlo_kuhinja
+    name: "svjetlo_kuhinja"
+    restore_mode: RESTORE_DEFAULT_OFF
+    pin:
+      mcp23xxx: mcp_lights
+      number: 10
+      mode:
+        output: true
+    inverted: false
+
+  - platform: gpio
+    id: svjetlo_sank
+    name: "svjetlo_sank"
+    restore_mode: RESTORE_DEFAULT_OFF
+    pin:
+      mcp23xxx: mcp_lights
+      number: 11
+      mode:
+        output: true
+    inverted: false
+
+  - platform: gpio
+    id: svjetlo_hodnik
+    name: "svjetlo_hodnik"
+    restore_mode: RESTORE_DEFAULT_OFF
+    pin:
+      mcp23xxx: mcp_lights
+      number: 12
+      mode:
+        output: true
+    inverted: false
+
+  # === KUPAONA ↔ BOJLER INTERLOCK s PAMĆENJEM ===
+  - platform: gpio
+    id: svjetlo_kupaona
+    name: "svjetlo_kupaona"
+    restore_mode: RESTORE_DEFAULT_OFF
+    pin:
+      mcp23xxx: mcp_lights
+      number: 13
+      mode:
+        output: true
+    inverted: false
+    on_turn_on:
+      then:
+        # Spremi trenutno stanje bojlera PRIJE gašenja
+        - globals.set:
+            id: bojler_was_on
+            value: !lambda 'return id(uticnica_bojler).state;'
+        - logger.log:
+            format: "kupaona ON -> bojler OFF (saved_state=%d)"
+            args: ['id(bojler_was_on) ? 1 : 0']
+            level: DEBUG
+        - switch.turn_off: uticnica_bojler
+    on_turn_off:
+      then:
+        # Vrati bojler SAMO ako je bio upaljen prije paljenja kupaone
+        - logger.log:
+            format: "kupaona OFF -> bojler restore? saved_state=%d"
+            args: ['id(bojler_was_on) ? 1 : 0']
+            level: DEBUG
+        - if:
+            condition:
+              lambda: 'return id(bojler_was_on);'
+            then:
+              - logger.log:
+                  format: "kupaona OFF -> restoring bojler ON"
+                  level: DEBUG
+              - switch.turn_on: uticnica_bojler
+            else:
+              - logger.log:
+                  format: "kupaona OFF -> bojler stays OFF (was already OFF)"
+                  level: DEBUG
+
+  - platform: gpio
+    id: svjetlo_soba1
+    name: "svjetlo_soba1"
+    restore_mode: RESTORE_DEFAULT_OFF
+    pin:
+      mcp23xxx: mcp_lights
+      number: 14
+      mode:
+        output: true
+    inverted: false
+
+  - platform: gpio
+    id: svjetlo_soba2
+    name: "svjetlo_soba2"
+    restore_mode: RESTORE_DEFAULT_OFF
+    pin:
+      mcp23xxx: mcp_lights
+      number: 15
+      mode:
+        output: true
+    inverted: false
+
+  # ===== UTIČNICE (MCP 0x22 - mcp_outlets) =====
+  - platform: gpio
+    id: uticnica_ulaz
+    name: "uticnica_ulaz"
+    restore_mode: RESTORE_DEFAULT_OFF
+    pin:
+      mcp23xxx: mcp_outlets
+      number: 0
+      mode:
+        output: true
+    inverted: false
+
+  - platform: gpio
+    id: uticnica_kuhinja
+    name: "uticnica_kuhinja"
+    restore_mode: RESTORE_DEFAULT_OFF
+    pin:
+      mcp23xxx: mcp_outlets
+      number: 1
+      mode:
+        output: true
+    inverted: false
+
+  - platform: gpio
+    id: uticnica_frizider
+    name: "uticnica_frizider"
+    restore_mode: RESTORE_DEFAULT_OFF
+    pin:
+      mcp23xxx: mcp_outlets
+      number: 2
+      mode:
+        output: true
+    inverted: false
+
+  - platform: gpio
+    id: uticnica_kupaona
+    name: "uticnica_kupaona"
+    restore_mode: RESTORE_DEFAULT_OFF
+    pin:
+      mcp23xxx: mcp_outlets
+      number: 3
+      mode:
+        output: true
+    inverted: false
+
+  # === BOJLER s dodatnom zaštitom ===
+  - platform: gpio
+    id: uticnica_bojler
+    name: "uticnica_bojler"
+    restore_mode: RESTORE_DEFAULT_OFF
+    pin:
+      mcp23xxx: mcp_outlets
+      number: 4
+      mode:
+        output: true
+    inverted: false
+    on_turn_on:
+      then:
+        # Zaštita: ne dozvoli paljenje bojlera ako je kupaona upaljena
+        - if:
+            condition:
+              lambda: 'return id(svjetlo_kupaona).state;'
+            then:
+              - logger.log:
+                  format: "bojler ON BLOCKED -> kupaona is ON, turning bojler OFF"
+                  level: WARN
+              - switch.turn_off: uticnica_bojler
+
+  - platform: gpio
+    id: uticnica_terasa
+    name: "uticnica_terasa"
+    restore_mode: RESTORE_DEFAULT_OFF
+    pin:
+      mcp23xxx: mcp_outlets
+      number: 5
+      mode:
+        output: true
+    inverted: false
+
+  # NOTE: Pin 6 i 7 su PIR senzori (binary_sensor input)
+
+  - platform: gpio
+    id: uticnica_tv
+    name: "uticnica_tv"
+    restore_mode: RESTORE_DEFAULT_OFF
+    pin:
+      mcp23xxx: mcp_outlets
+      number: 8
+      mode:
+        output: true
+    inverted: false
+
+  - platform: gpio
+    id: uticnica_boravak
+    name: "uticnica_boravak"
+    restore_mode: RESTORE_DEFAULT_OFF
+    pin:
+      mcp23xxx: mcp_outlets
+      number: 9
+      mode:
+        output: true
+    inverted: false
+
+  - platform: gpio
+    id: uticnica_blagavaona
+    name: "uticnica_blagavaona"
+    restore_mode: RESTORE_DEFAULT_OFF
+    pin:
+      mcp23xxx: mcp_outlets
+      number: 10
+      mode:
+        output: true
+    inverted: false
+
+  - platform: gpio
+    id: pecnica
+    name: "pecnica"
+    restore_mode: RESTORE_DEFAULT_OFF
+    pin:
+      mcp23xxx: mcp_outlets
+      number: 11
+      mode:
+        output: true
+    inverted: false
+
+  - platform: gpio
+    id: uticnica_soba1
+    name: "uticnica_soba1"
+    restore_mode: RESTORE_DEFAULT_OFF
+    pin:
+      mcp23xxx: mcp_outlets
+      number: 12
+      mode:
+        output: true
+    inverted: false
+
+  - platform: gpio
+    id: uticnica_soba2
+    name: "uticnica_soba2"
+    restore_mode: RESTORE_DEFAULT_OFF
+    pin:
+      mcp23xxx: mcp_outlets
+      number: 13
+      mode:
+        output: true
+    inverted: false
+
+  - platform: gpio
+    id: slobodno1
+    name: "slobodno1"
+    restore_mode: RESTORE_DEFAULT_OFF
+    pin:
+      mcp23xxx: mcp_outlets
+      number: 14
+      mode:
+        output: true
+    inverted: false
+
+  - platform: gpio
+    id: slobodno2
+    name: "slobodno2"
+    restore_mode: RESTORE_DEFAULT_OFF
+    pin:
+      mcp23xxx: mcp_outlets
+      number: 15
+      mode:
+        output: true
+    inverted: false
+
+# ============================================================================
+# BINARY SENSORS - PIR, TIPKALA
+# ============================================================================
+binary_sensor:
+  # === PIR SENZORI (MCP 0x22) - DISABLED BY DEFAULT ===
+  # Current assumption: PIR outputs are active-high, so pullup:true + inverted:false is kept.
+  # If a PIR output is active-low/open-collector, change that sensor to inverted:true.
+  - platform: gpio
+    id: pir_vani
+    name: "pir_vani"
+    device_class: motion
+    disabled_by_default: true
+    pin:
+      mcp23xxx: mcp_outlets
+      number: 6
+      mode:
+        input: true
+        pullup: true
+      inverted: false
+    filters:
+      - delayed_on: 120ms
+      - delayed_off: 300ms
+    on_press:
+      then:
+        - script.execute: pir_vani_timer
+
+  - platform: gpio
+    id: pir_ulaz
+    name: "pir_ulaz"
+    device_class: motion
+    disabled_by_default: true
+    pin:
+      mcp23xxx: mcp_outlets
+      number: 7
+      mode:
+        input: true
+        pullup: true
+      inverted: false
+    filters:
+      - delayed_on: 120ms
+      - delayed_off: 300ms
+    on_press:
+      then:
+        - script.execute: pir_ulaz_timer
+
+  # === TIPKALA (MCP 0x27 - mcp_buttons) =====
+  # Sva tipkala: kratki klik = toggle, držanje ≥5s = all_off
+
+  - platform: gpio
+    id: tipkalo_svjetlo_vani
+    name: "tipkalo_svjetlo_vani"
+    pin:
+      mcp23xxx: mcp_buttons
+      number: 0
+      mode:
+        input: true
+        pullup: true
+      inverted: true
+    on_multi_click:
+      - timing:
+          - ON for at least 5s
+        then:
+          - script.execute: all_off
+      - timing:
+          - ON for 50ms to 4.9s
+        then:
+          - switch.toggle: svjetlo_vani
+
+  - platform: gpio
+    id: tipkalo_svjetlo_terasa1
+    name: "tipkalo_svjetlo_terasa1"
+    pin:
+      mcp23xxx: mcp_buttons
+      number: 1
+      mode:
+        input: true
+        pullup: true
+      inverted: true
+    on_multi_click:
+      - timing:
+          - ON for at least 5s
+        then:
+          - script.execute: all_off
+      - timing:
+          - ON for 50ms to 4.9s
+        then:
+          - switch.toggle: svjetlo_terasa1
+
+  - platform: gpio
+    id: tipkalo_svjetlo_terasa2
+    name: "tipkalo_svjetlo_terasa2"
+    pin:
+      mcp23xxx: mcp_buttons
+      number: 2
+      mode:
+        input: true
+        pullup: true
+      inverted: true
+    on_multi_click:
+      - timing:
+          - ON for at least 5s
+        then:
+          - script.execute: all_off
+      - timing:
+          - ON for 50ms to 4.9s
+        then:
+          - switch.toggle: svjetlo_terasa2
+
+  - platform: gpio
+    id: tipkalo_svjetlo_ulaz
+    name: "tipkalo_svjetlo_ulaz"
+    pin:
+      mcp23xxx: mcp_buttons
+      number: 3
+      mode:
+        input: true
+        pullup: true
+      inverted: true
+    on_multi_click:
+      - timing:
+          - ON for at least 5s
+        then:
+          - script.execute: all_off
+      - timing:
+          - ON for 50ms to 4.9s
+        then:
+          - switch.toggle: svjetlo_ulaz
+
+  - platform: gpio
+    id: tipkalo_svjetlo_hidrofor
+    name: "tipkalo_svjetlo_hidrofor"
+    pin:
+      mcp23xxx: mcp_buttons
+      number: 4
+      mode:
+        input: true
+        pullup: true
+      inverted: true
+    on_multi_click:
+      - timing:
+          - ON for at least 5s
+        then:
+          - script.execute: all_off
+      - timing:
+          - ON for 50ms to 4.9s
+        then:
+          - switch.toggle: svjetlo_hidrofor
+
+  - platform: gpio
+    id: tipkalo_svjetlo_tv
+    name: "tipkalo_svjetlo_tv"
+    pin:
+      mcp23xxx: mcp_buttons
+      number: 5
+      mode:
+        input: true
+        pullup: true
+      inverted: true
+    on_multi_click:
+      - timing:
+          - ON for at least 5s
+        then:
+          - script.execute: all_off
+      - timing:
+          - ON for 50ms to 4.9s
+        then:
+          - switch.toggle: svjetlo_tv
+
+  - platform: gpio
+    id: tipkalo_svjetlo_fotelja
+    name: "tipkalo_svjetlo_fotelja"
+    pin:
+      mcp23xxx: mcp_buttons
+      number: 6
+      mode:
+        input: true
+        pullup: true
+      inverted: true
+    on_multi_click:
+      - timing:
+          - ON for at least 5s
+        then:
+          - script.execute: all_off
+      # Dupli klik -> ciklus svjetline (25/50/75/100%)
+      - timing:
+          - ON for 50ms to 500ms
+          - OFF for 50ms to 500ms
+          - ON for 50ms to 500ms
+        then:
+          - script.execute: fotelja_dim_step
+      # Kratki klik -> toggle on/off (pamti zadnju svjetlinu)
+      - timing:
+          - ON for 50ms to 4.9s
+        then:
+          - light.toggle: svjetlo_fotelja_dim
+
+  - platform: gpio
+    id: tipkalo_svjetlo_stup
+    name: "tipkalo_svjetlo_stup"
+    pin:
+      mcp23xxx: mcp_buttons
+      number: 7
+      mode:
+        input: true
+        pullup: true
+      inverted: true
+    on_multi_click:
+      - timing:
+          - ON for at least 5s
+        then:
+          - script.execute: all_off
+      - timing:
+          - ON for 50ms to 4.9s
+        then:
+          - switch.toggle: svjetlo_stup
+
+  - platform: gpio
+    id: tipkalo_svjetlo_boravak
+    name: "tipkalo_svjetlo_boravak"
+    pin:
+      mcp23xxx: mcp_buttons
+      number: 8
+      mode:
+        input: true
+        pullup: true
+      inverted: true
+    on_multi_click:
+      - timing:
+          - ON for at least 5s
+        then:
+          - script.execute: all_off
+      - timing:
+          - ON for 50ms to 4.9s
+        then:
+          - switch.toggle: svjetlo_boravak
+
+  - platform: gpio
+    id: tipkalo_svjetlo_blagavaona
+    name: "tipkalo_svjetlo_blagavaona"
+    pin:
+      mcp23xxx: mcp_buttons
+      number: 9
+      mode:
+        input: true
+        pullup: true
+      inverted: true
+    on_multi_click:
+      - timing:
+          - ON for at least 5s
+        then:
+          - script.execute: all_off
+      - timing:
+          - ON for 50ms to 4.9s
+        then:
+          - switch.toggle: svjetlo_blagavaona
+
+  - platform: gpio
+    id: tipkalo_svjetlo_kuhinja
+    name: "tipkalo_svjetlo_kuhinja"
+    pin:
+      mcp23xxx: mcp_buttons
+      number: 10
+      mode:
+        input: true
+        pullup: true
+      inverted: true
+    on_multi_click:
+      - timing:
+          - ON for at least 5s
+        then:
+          - script.execute: all_off
+      - timing:
+          - ON for 50ms to 4.9s
+        then:
+          - switch.toggle: svjetlo_kuhinja
+
+  - platform: gpio
+    id: tipkalo_svjetlo_sank
+    name: "tipkalo_svjetlo_sank"
+    pin:
+      mcp23xxx: mcp_buttons
+      number: 11
+      mode:
+        input: true
+        pullup: true
+      inverted: true
+    on_multi_click:
+      - timing:
+          - ON for at least 5s
+        then:
+          - script.execute: all_off
+      - timing:
+          - ON for 50ms to 4.9s
+        then:
+          - switch.toggle: svjetlo_sank
+
+  - platform: gpio
+    id: tipkalo_svjetlo_hodnik
+    name: "tipkalo_svjetlo_hodnik"
+    pin:
+      mcp23xxx: mcp_buttons
+      number: 12
+      mode:
+        input: true
+        pullup: true
+      inverted: true
+    on_multi_click:
+      - timing:
+          - ON for at least 5s
+        then:
+          - script.execute: all_off
+      - timing:
+          - ON for 50ms to 4.9s
+        then:
+          - switch.toggle: svjetlo_hodnik
+
+  - platform: gpio
+    id: tipkalo_svjetlo_kupaona
+    name: "tipkalo_svjetlo_kupaona"
+    pin:
+      mcp23xxx: mcp_buttons
+      number: 13
+      mode:
+        input: true
+        pullup: true
+      inverted: true
+    on_multi_click:
+      - timing:
+          - ON for at least 5s
+        then:
+          - script.execute: all_off
+      - timing:
+          - ON for 50ms to 4.9s
+        then:
+          - switch.toggle: svjetlo_kupaona
+
+  - platform: gpio
+    id: tipkalo_svjetlo_soba1
+    name: "tipkalo_svjetlo_soba1"
+    pin:
+      mcp23xxx: mcp_buttons
+      number: 14
+      mode:
+        input: true
+        pullup: true
+      inverted: true
+    on_multi_click:
+      - timing:
+          - ON for at least 5s
+        then:
+          - script.execute: all_off
+      - timing:
+          - ON for 50ms to 4.9s
+        then:
+          - switch.toggle: svjetlo_soba1
+
+  - platform: gpio
+    id: tipkalo_svjetlo_soba2
+    name: "tipkalo_svjetlo_soba2"
+    pin:
+      mcp23xxx: mcp_buttons
+      number: 15
+      mode:
+        input: true
+        pullup: true
+      inverted: true
+    on_multi_click:
+      - timing:
+          - ON for at least 5s
+        then:
+          - script.execute: all_off
+      - timing:
+          - ON for 50ms to 4.9s
+        then:
+          - switch.toggle: svjetlo_soba2
+
+# === Daljinski restart i dijagnostika (dodano 2026-08-26) ===
+# Restart gumb da se plocica moze podici iz HA-a bez odlaska do nje.
+# Uptime je kljucan za razlikovanje "plocica se resetirala" od "veza je pukla".
+button:
+  - platform: restart
+    name: "Restart"
+  - platform: safe_mode
+    name: "Safe mode"
+
+sensor:
+  - platform: wifi_signal
+    name: "WiFi signal"
+    update_interval: 60s
+  - platform: uptime
+    name: "Uptime"
+    update_interval: 60s
+
+  - platform: internal_temperature
+    name: "Temperatura cipa"
+    entity_category: diagnostic
+
+  - platform: debug
+    free:
+      name: "Slobodna memorija"
+      entity_category: diagnostic
+    loop_time:
+      name: "Loop time"
+      entity_category: diagnostic
+
+# IP i razlog zadnjeg reseta: bez toga se "pala je veza" ne razlikuje
+# od "plocica se resetirala", a to su dva razlicita kvara.
+text_sensor:
+  - platform: wifi_info
+    ip_address:
+      name: "IP"
+      entity_category: diagnostic
+  - platform: debug
+    reset_reason:
+      name: "Razlog reseta"
+      entity_category: diagnostic
+
+debug:
+  update_interval: 60s

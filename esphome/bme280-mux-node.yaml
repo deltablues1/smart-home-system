@@ -30,7 +30,7 @@ logger:
 
 api:
   encryption:
-    key: !secret api_encryption_key
+    key: !secret api_encryption_key_mux
 
 ota:
   - platform: esphome

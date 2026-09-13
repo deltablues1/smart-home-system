@@ -125,11 +125,40 @@ Detaljno ožičenje i dnevnik dizajna:
 
 ---
 
-## ESP32 I/O čvor
+## ESP32 I/O čvor (`esphome/esp32-io.yaml`)
 
-Releji za 15 svjetala, 14 utičnica i bojler, dimer i 16 zidnih tipkala. Home
-Assistant s njim razgovara nativnim ESPHome API-jem, a Jarvis preko MQTT-a. Zato
-dva puta otkazuju neovisno jedan o drugom
+Razvodna ploča kuće: tri MCP23017 I/O proširenja na jednoj I²C sabirnici.
+
+| Proširenje | Adresa | Nosi |
+|------------|--------|------|
+| `mcp_lights` | `0x20` | 15 releja za svjetla i jedan rezervni |
+| `mcp_outlets` | `0x22` | 14 releja za utičnice (uključujući bojler, pećnicu i dva rezervna) i dva PIR ulaza |
+| `mcp_buttons` | `0x27` | 16 zidnih tipkala |
+
+Svjetlo kod fotelje prigušuje se PWM-om izravno s GPIO13.
+
+Home Assistant s čvorom razgovara šifriranim nativnim ESPHome API-jem, a Jarvis
+preko MQTT-a, s porukama o dolasku i odlasku na `esp32-io/status`. Ta dva puta
+otkazuju neovisno jedan o drugom
 ([incident](inzenjerske-biljeske.md#tri-dana-u-redu-uređaju-kojeg-nije-bilo)).
 
-> Njegova ESPHome konfiguracija još nije u ovom repozitoriju.
+Logika koja živi na samom ESP32, pa radi i kad su oba Pija ugašena:
+
+- **Tipkala.** Kratki pritisak pali ili gasi svjetlo. Držanje bilo kojeg tipkala
+  5 s gasi sva svjetla. Dvostruki klik na tipkalo fotelje mijenja svjetlinu
+  redom 25, 50, 75 i 100 %.
+- **Blokada kupaona–bojler s pamćenjem.** Paljenje svjetla u kupaoni zapamti je
+  li bojler radio i ugasi ga. Gašenje svjetla vraća bojler samo ako je prije
+  radio. Bojler se ne može upaliti dok je svjetlo u kupaoni upaljeno.
+- **Svjetla na senzor pokreta s ručnim preuzimanjem.** Vani i na ulazu PIR pali
+  svjetlo na 60 odnosno 30 s. Svjetlo upaljeno rukom ostaje upaljeno kad timer
+  istekne. (PIR ulazi su po zadanom isključeni.)
+- **Sigurno pokretanje.** Nakon nestanka struje svi releji ostaju ugašeni.
+
+Dijagnostika je dodana nakon trodnevnog ispada MQTT-a, da se restart razlikuje
+od izgubljene veze: jačina Wi-Fi signala, vrijeme rada, temperatura čipa,
+slobodna memorija, trajanje petlje, IP adresa i razlog zadnjeg reseta. Uz to
+postoje gumbi za restart i safe mode.
+
+Sve vjerodajnice (Wi-Fi, ključ za API, MQTT, OTA, web server) dolaze iz
+ESPHome datoteke `secrets.yaml`, koja nije u repozitoriju.

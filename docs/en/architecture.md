@@ -122,9 +122,10 @@ the wrong place.
 | 4 | Mail, calendar, documents, tasks | orchestrator | needs tools and chaining |
 | 5 | A command with a time ("sutra u 7 upali TV") | orchestrator → `scheduler` | a device lane would execute it *now* |
 | 6 | Research or comparison | orchestrator | a question naming a device is not a command |
-| 7 | Weather | local Open-Meteo lane | no agent has a weather tool |
-| 8 | Philosophy, faith, home devices | `socrates`, `christian_guide`, `smart_home` | specialist lanes |
-| 9 | Everything else | `voice_qa` | fast, tool-less; replies `[[ESCALATE]]` when it needs tools |
+| 7 | A measurement about the house ("temperatura u kupaoni", "koliko smo jučer potrošili") | `smart_home` | "temperatura" is also a weather word, and the forecast used to answer it |
+| 8 | Weather | local Open-Meteo lane | no agent has a weather tool |
+| 9 | Philosophy, faith, home devices | `socrates`, `christian_guide`, `smart_home` | specialist lanes |
+| 10 | Everything else | `voice_qa` | fast, tool-less; replies `[[ESCALATE]]` when it needs tools |
 
 `voice_qa` runs on about 1,500 prompt tokens against the orchestrator's ~7,000,
 so defaulting to it made ordinary questions several times cheaper and faster.
@@ -149,7 +150,7 @@ On the Pi the `rpi-home` profile loads a curated set from
 |-------|------|-------|
 | `smart_orchestrator` | Coordinates workers; each worker is wrapped as a tool | the workers below |
 | `voice_qa` | Fast spoken Q&A, escalates when tools are needed | none |
-| `smart_home` | Lights, sockets, dimmer, scenes, TV, sensors and their history, shopping list | MQTT, Home Assistant |
+| `smart_home` | Lights, sockets, dimmer, scenes, TV, sensors and their history, shopping list, and everything else Home Assistant knows (read-only) | MQTT, Home Assistant |
 | `secretary` | Google Calendar, free/busy, meeting slots | Calendar |
 | `mailer` | Gmail | Gmail |
 | `librarian` | Google Drive | Drive |
@@ -260,5 +261,5 @@ deploy/rpi/        systemd units, setup and audio scripts, kiosk panel
 deploy/home_assistant/   custom integration, dashboard builder, themes, JS cards
 deploy/tv_app_launcher/  tiny Android TV app that lets Jarvis open any app
 esphome/           ESP32 sensor node configuration and the power component
-tests/unit/        1,450 tests, no network or credentials needed
+tests/unit/        1,486 tests, no network or credentials needed
 ```

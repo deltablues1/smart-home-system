@@ -123,9 +123,10 @@ raspored nešto slao na krivo mjesto.
 | 4 | Mail, kalendar, dokumenti, zadaci | orkestrator | trebaju alati i ulančavanje |
 | 5 | Naredba s vremenom („sutra u 7 upali TV") | orkestrator → `scheduler` | traka za uređaje izvršila bi je *odmah* |
 | 6 | Istraživanje ili usporedba | orkestrator | pitanje koje spominje uređaj nije naredba |
-| 7 | Prognoza | lokalna Open-Meteo traka | nijedan agent nema alat za vrijeme |
-| 8 | Filozofija, vjera, kućni uređaji | `socrates`, `christian_guide`, `smart_home` | specijalizirane trake |
-| 9 | Sve ostalo | `voice_qa` | brz, bez alata; kad treba alat, vraća `[[ESCALATE]]` |
+| 7 | Mjerenje u kući („temperatura u kupaoni", „koliko smo jučer potrošili") | `smart_home` | „temperatura" je i riječ za vrijeme, a nekad je na to odgovarala prognoza |
+| 8 | Prognoza | lokalna Open-Meteo traka | nijedan agent nema alat za vrijeme |
+| 9 | Filozofija, vjera, kućni uređaji | `socrates`, `christian_guide`, `smart_home` | specijalizirane trake |
+| 10 | Sve ostalo | `voice_qa` | brz, bez alata; kad treba alat, vraća `[[ESCALATE]]` |
 
 `voice_qa` troši oko 1.500 tokena prompta, a orkestrator oko 7.000. Zato je
 obično pitanje uz njega nekoliko puta jeftinije i brže. Kad zaključi da zahtjevu
@@ -153,7 +154,7 @@ Na Piju profil `rpi-home` iz `config/agent_registry.py` učitava odabrani skup:
 |-------|-------|-------|
 | `smart_orchestrator` | Koordinira radnike; svaki radnik je umotan kao alat | radnici ispod |
 | `voice_qa` | Brza govorna pitanja, prosljeđuje dalje kad trebaju alati | nema |
-| `smart_home` | Svjetla, utičnice, dimer, scene, TV, senzori i povijest, popis za kupovinu | MQTT, Home Assistant |
+| `smart_home` | Svjetla, utičnice, dimer, scene, TV, senzori i povijest, popis za kupovinu i sve ostalo što Home Assistant zna (samo čitanje) | MQTT, Home Assistant |
 | `secretary` | Google Kalendar, slobodni termini, sastanci | Calendar |
 | `mailer` | Gmail | Gmail |
 | `librarian` | Google Drive | Drive |
@@ -277,5 +278,5 @@ deploy/rpi/        systemd jedinice, skripte za postavljanje i zvuk, zidni panel
 deploy/home_assistant/   vlastita integracija, generator dashboarda, teme, JS kartice
 deploy/tv_app_launcher/  mala Android TV aplikacija kojom Jarvis otvara bilo koju aplikaciju
 esphome/           konfiguracija ESP32 senzorskog čvora i komponenta za snagu
-tests/unit/        1.450 testova, bez mreže i vjerodajnica
+tests/unit/        1.486 testova, bez mreže i vjerodajnica
 ```
