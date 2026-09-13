@@ -1,0 +1,63 @@
+# --- Python -----------------------------------------------------------------
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+build/
+dist/
+
+# --- Environments -----------------------------------------------------------
+.venv/
+venv/
+.env
+.env.*
+!.env.example
+deploy/rpi/.env.rpi
+
+# --- Secrets: never in git --------------------------------------------------
+secrets/
+state/
+*.pem
+*.key
+*.p12
+*.pfx
+service_account*.json
+oauth_client_credentials.json
+credentials.json
+tokens*.json
+.google_workspace_adk/
+esphome/secrets.yaml
+
+# --- Runtime state written by the running system ----------------------------
+# Real data lives here (learned TV apps, known mail recipients, budgets, job
+# results). The *.example.json files next to them show the shape.
+config/tv_apps.json
+config/tv_channels.json
+config/scheduled_jobs*.json
+!config/*.example.json
+data/*.json
+data/dashboard-backups/
+data/christian/build/
+logs/
+output/
+uploads/
+*.log
+*.bak
+*.bak_*
+
+# --- Android TV launcher build outputs --------------------------------------
+deploy/tv_app_launcher/build/
+deploy/tv_app_launcher/*.jar
+deploy/tv_app_launcher/*.keystore
+
+# --- ESPHome build cache ----------------------------------------------------
+esphome/.esphome/
+
+# --- Editors / OS -----------------------------------------------------------
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

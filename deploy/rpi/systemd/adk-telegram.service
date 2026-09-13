@@ -1,0 +1,26 @@
+[Unit]
+Description=Jarvis ADK Telegram Interface
+After=network-online.target
+Wants=network-online.target
+# Never give up restarting: a boot-time network hiccup must not park the unit
+# in failed state, which is how the bot stayed down on 2026-08-18.
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+User=raspberrypijarvis
+WorkingDirectory=/home/raspberrypijarvis/google_claude
+EnvironmentFile=/home/raspberrypijarvis/google_claude/.env
+ExecStart=/home/raspberrypijarvis/google_claude/.venv/bin/python scripts/telegram_bot.py
+Restart=always
+RestartSec=5
+TimeoutStopSec=30
+
+# Liveness, not just "the PID exists". The bot sends WATCHDOG=1 only while the
+# updater is really polling; if polling dies inside a live process, systemd
+# kills and restarts it instead of reporting a healthy zombie.
+WatchdogSec=180
+NotifyAccess=main
+
+[Install]
+WantedBy=multi-user.target

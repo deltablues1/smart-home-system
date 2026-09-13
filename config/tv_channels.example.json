@@ -1,0 +1,8 @@
+{
+  "HRT 1 HD": {"number": 1, "app": "a1 xplore tv"},
+  "HRT 2 HD": {"number": 2, "app": "a1 xplore tv"},
+  "RTL HD": {"number": 3, "app": "a1 xplore tv"},
+  "Nova TV HD": {"number": 4, "app": "a1 xplore tv"},
+  "Arena Sport 1 HD": {"number": 201, "app": "a1 xplore tv"},
+  "Some channel not yet learned": {"number": null, "app": "a1 xplore tv"}
+}

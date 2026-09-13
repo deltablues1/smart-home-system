@@ -1,0 +1,3 @@
+type: iframe
+url: http://rpi5-jarvis.local:8000
+aspect_ratio: 75%

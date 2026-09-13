@@ -1,0 +1,33 @@
+{
+  "source_id": "ccel_augustine_confessions",
+  "work_title": "Confessions",
+  "author": "Augustine of Hippo",
+  "source_family": "ccel",
+  "canonical_url": "https://www.ccel.org/...",
+  "rights_class": "public_domain",
+  "language": "en",
+  "text_type": "reflection",
+  "authority_level": "medium",
+  "citation_short": "Augustine, Confessions",
+  "persona_affinity": [
+    "augustine",
+    "christian_reflection"
+  ],
+  "document_id": "ccel_augustine_confessions_sec_001",
+  "document_title": "Book 1 / Chapter 1",
+  "hierarchy": {
+    "book": "1",
+    "chapter": "1",
+    "section": null,
+    "paragraph": null
+  },
+  "chunk_index": 0,
+  "chunk_total": 1,
+  "clean_text": "Great are You, O Lord...",
+  "token_estimate": 180,
+  "query_intents": [
+    "teach",
+    "reflect",
+    "discern"
+  ]
+}

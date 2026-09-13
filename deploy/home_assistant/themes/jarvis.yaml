@@ -1,0 +1,224 @@
+# Jarvis panel themes — one sky per part of the day.
+#
+# Home Assistant switches these system-wide with frontend.set_theme, driven by
+# an automation on the sun and the weather. They carry the palette and the
+# translucency; nothing here changes what any card does.
+#
+# `ha-card-background` gives dashboard cards their translucency. Keep
+# `card-background-color` opaque: current HA also uses it for dropdown menus
+# and dialogs, where seeing the dashboard through the controls is illegible.
+# The explicit dialog and Material surface variables cover both UI generations.
+#
+# Cards are deliberately translucent so the sky reads through them. That is the
+# whole point — an opaque card on a gradient looks like a sticker on a window.
+
+jarvis_dan:
+  # --- brand ---
+  primary-color: "#b06a1e"
+  accent-color: "#b06a1e"
+  dark-primary-color: "#8a5216"
+  light-primary-color: "#d38c3e"
+  # --- text ---
+  primary-text-color: "#14181d"
+  secondary-text-color: "#4a5560"
+  disabled-text-color: "#8a949e"
+  text-primary-color: "#ffffff"
+  # --- the sky ---
+  primary-background-color: "#cfdfea"
+  secondary-background-color: "#e9eef0"
+  lovelace-background: "linear-gradient(170deg, #a9c9e4 0%, #cfdfea 42%, #e9eef0 100%) fixed"
+  # --- cards float on it ---
+  ha-card-background: "rgba(255, 255, 255, 0.58)"
+  card-background-color: "#eef3f7"
+  ha-dialog-surface-background: "#eef3f7"
+  mdc-theme-surface: "#eef3f7"
+  wa-color-text-normal: "var(--primary-text-color)"
+  wa-color-text-quiet: "var(--secondary-text-color)"
+  wa-color-neutral-fill-normal: "var(--secondary-background-color)"
+  ha-color-fill-primary-quiet-resting: "color-mix(in srgb, var(--primary-color) 15%, var(--card-background-color))"
+  ha-color-fill-primary-quiet-hover: "color-mix(in srgb, var(--primary-color) 25%, var(--card-background-color))"
+  # Five 40px sensor rows + padding fit four grid rows with a 3px gap.
+  entities-card-row-gap: "3px"
+  ha-card-border-color: "rgba(20, 24, 29, 0.14)"
+  ha-card-border-width: "1px"
+  ha-card-border-radius: "10px"
+  ha-card-box-shadow: "none"
+  divider-color: "rgba(20, 24, 29, 0.12)"
+  # --- chrome ---
+  app-header-background-color: "transparent"
+  app-header-text-color: "#14181d"
+  sidebar-background-color: "rgba(255, 255, 255, 0.72)"
+  sidebar-text-color: "#14181d"
+  sidebar-icon-color: "#4a5560"
+  sidebar-selected-icon-color: "#b06a1e"
+  sidebar-selected-text-color: "#b06a1e"
+  # --- state ---
+  state-icon-color: "#4a5560"
+  state-icon-active-color: "#b06a1e"
+  paper-item-icon-color: "#4a5560"
+  paper-item-icon-active-color: "#b06a1e"
+  switch-checked-color: "#b06a1e"
+
+jarvis_zalazak:
+  primary-color: "#f0b775"
+  accent-color: "#f0b775"
+  dark-primary-color: "#c98d4c"
+  light-primary-color: "#ffd7a5"
+  primary-text-color: "#fbf3ea"
+  secondary-text-color: "#d3bfae"
+  disabled-text-color: "#9b8577"
+  text-primary-color: "#2a1f28"
+  primary-background-color: "#5c4a5e"
+  secondary-background-color: "#3d3a5c"
+  # The first stars come out at the top of the sky while the horizon is still
+  # warm -- only a handful, and only up high, which is what dusk actually does.
+  lovelace-background: >-
+    radial-gradient(1.2px 1.2px at 18% 5%, rgba(255,255,255,0.55), rgba(255,255,255,0) 100%) fixed,
+    radial-gradient(1px 1px at 41% 9%, rgba(255,255,255,0.4), rgba(255,255,255,0) 100%) fixed,
+    radial-gradient(1.4px 1.4px at 63% 4%, rgba(255,255,255,0.6), rgba(255,255,255,0) 100%) fixed,
+    radial-gradient(1px 1px at 77% 11%, rgba(255,255,255,0.35), rgba(255,255,255,0) 100%) fixed,
+    radial-gradient(1.1px 1.1px at 91% 6%, rgba(255,255,255,0.45), rgba(255,255,255,0) 100%) fixed,
+    radial-gradient(1px 1px at 8% 12%, rgba(255,255,255,0.3), rgba(255,255,255,0) 100%) fixed,
+    linear-gradient(175deg, #3d3a5c 0%, #8a5a62 46%, #e0925a 82%, #f0b775 100%) fixed
+  ha-card-background: "rgba(28, 20, 26, 0.34)"
+  card-background-color: "#352a36"
+  ha-dialog-surface-background: "#352a36"
+  mdc-theme-surface: "#352a36"
+  wa-color-text-normal: "var(--primary-text-color)"
+  wa-color-text-quiet: "var(--secondary-text-color)"
+  wa-color-neutral-fill-normal: "var(--secondary-background-color)"
+  ha-color-fill-primary-quiet-resting: "color-mix(in srgb, var(--primary-color) 15%, var(--card-background-color))"
+  ha-color-fill-primary-quiet-hover: "color-mix(in srgb, var(--primary-color) 25%, var(--card-background-color))"
+  entities-card-row-gap: "3px"
+  ha-card-border-color: "rgba(255, 240, 225, 0.20)"
+  ha-card-border-width: "1px"
+  ha-card-border-radius: "10px"
+  ha-card-box-shadow: "none"
+  divider-color: "rgba(255, 240, 225, 0.18)"
+  app-header-background-color: "transparent"
+  app-header-text-color: "#fbf3ea"
+  sidebar-background-color: "rgba(40, 30, 42, 0.55)"
+  sidebar-text-color: "#fbf3ea"
+  sidebar-icon-color: "#d3bfae"
+  sidebar-selected-icon-color: "#f0b775"
+  sidebar-selected-text-color: "#f0b775"
+  state-icon-color: "#d3bfae"
+  state-icon-active-color: "#f0b775"
+  paper-item-icon-color: "#d3bfae"
+  paper-item-icon-active-color: "#f0b775"
+  switch-checked-color: "#f0b775"
+
+jarvis_noc:
+  primary-color: "#e8a33d"
+  accent-color: "#e8a33d"
+  dark-primary-color: "#c4862f"
+  light-primary-color: "#f5bc63"
+  primary-text-color: "#e7e5e1"
+  secondary-text-color: "#8b8d94"
+  disabled-text-color: "#61646c"
+  text-primary-color: "#101113"
+  primary-background-color: "#0a0e17"
+  secondary-background-color: "#121a26"
+  # Twenty-six stars and a moon, all of it CSS -- no add-on, no script. They
+  # thin out towards the bottom because that is where the horizon glow is, and
+  # each layer is `fixed` so the sky stays put while the page scrolls under it.
+  # The moon is a plain soft disc rather than a crescent: the real phase changes
+  # nightly and a painted crescent would be wrong most of the month.
+  lovelace-background: >-
+    radial-gradient(1.4px 1.4px at 12% 14%, rgba(255,255,255,0.75), rgba(255,255,255,0) 100%) fixed,
+    radial-gradient(1px 1px at 22% 8%, rgba(255,255,255,0.55), rgba(255,255,255,0) 100%) fixed,
+    radial-gradient(1.2px 1.2px at 31% 19%, rgba(255,255,255,0.6), rgba(255,255,255,0) 100%) fixed,
+    radial-gradient(1px 1px at 5% 26%, rgba(255,255,255,0.45), rgba(255,255,255,0) 100%) fixed,
+    radial-gradient(1.6px 1.6px at 44% 6%, rgba(255,255,255,0.8), rgba(255,255,255,0) 100%) fixed,
+    radial-gradient(1px 1px at 38% 23%, rgba(255,255,255,0.5), rgba(255,255,255,0) 100%) fixed,
+    radial-gradient(1.1px 1.1px at 53% 13%, rgba(255,255,255,0.6), rgba(255,255,255,0) 100%) fixed,
+    radial-gradient(1.3px 1.3px at 61% 5%, rgba(255,255,255,0.7), rgba(255,255,255,0) 100%) fixed,
+    radial-gradient(1px 1px at 68% 21%, rgba(255,255,255,0.45), rgba(255,255,255,0) 100%) fixed,
+    radial-gradient(1.5px 1.5px at 74% 9%, rgba(255,255,255,0.75), rgba(255,255,255,0) 100%) fixed,
+    radial-gradient(1.1px 1.1px at 89% 7%, rgba(255,255,255,0.55), rgba(255,255,255,0) 100%) fixed,
+    radial-gradient(1px 1px at 95% 17%, rgba(255,255,255,0.5), rgba(255,255,255,0) 100%) fixed,
+    radial-gradient(1px 1px at 3% 10%, rgba(255,255,255,0.4), rgba(255,255,255,0) 100%) fixed,
+    radial-gradient(1px 1px at 49% 27%, rgba(255,255,255,0.45), rgba(255,255,255,0) 100%) fixed,
+    radial-gradient(1.3px 1.3px at 79% 28%, rgba(255,255,255,0.55), rgba(255,255,255,0) 100%) fixed,
+    radial-gradient(1.2px 1.2px at 17% 33%, rgba(255,255,255,0.5), rgba(255,255,255,0) 100%) fixed,
+    radial-gradient(1px 1px at 27% 41%, rgba(255,255,255,0.4), rgba(255,255,255,0) 100%) fixed,
+    radial-gradient(1.4px 1.4px at 46% 36%, rgba(255,255,255,0.6), rgba(255,255,255,0) 100%) fixed,
+    radial-gradient(1px 1px at 57% 44%, rgba(255,255,255,0.4), rgba(255,255,255,0) 100%) fixed,
+    radial-gradient(1.2px 1.2px at 71% 34%, rgba(255,255,255,0.5), rgba(255,255,255,0) 100%) fixed,
+    radial-gradient(1px 1px at 83% 40%, rgba(255,255,255,0.42), rgba(255,255,255,0) 100%) fixed,
+    radial-gradient(1px 1px at 9% 48%, rgba(255,255,255,0.35), rgba(255,255,255,0) 100%) fixed,
+    radial-gradient(1.1px 1.1px at 35% 52%, rgba(255,255,255,0.4), rgba(255,255,255,0) 100%) fixed,
+    radial-gradient(1px 1px at 64% 55%, rgba(255,255,255,0.33), rgba(255,255,255,0) 100%) fixed,
+    radial-gradient(1.2px 1.2px at 92% 49%, rgba(255,255,255,0.42), rgba(255,255,255,0) 100%) fixed,
+    radial-gradient(1px 1px at 20% 58%, rgba(255,255,255,0.3), rgba(255,255,255,0) 100%) fixed,
+    radial-gradient(circle 21px at 84% 15%, rgba(240,238,228,0.94) 0%, rgba(240,238,228,0.9) 56%, rgba(240,238,228,0) 58%) fixed,
+    radial-gradient(circle 46px at 84% 15%, rgba(226,232,246,0.20) 0%, rgba(226,232,246,0) 70%) fixed,
+    radial-gradient(circle 150px at 84% 15%, rgba(150,175,215,0.13) 0%, rgba(150,175,215,0) 72%) fixed,
+    linear-gradient(180deg, #05070c 0%, #0a0e17 58%, #121a26 100%) fixed
+  ha-card-background: "rgba(255, 255, 255, 0.045)"
+  card-background-color: "#161e2b"
+  ha-dialog-surface-background: "#161e2b"
+  mdc-theme-surface: "#161e2b"
+  wa-color-text-normal: "var(--primary-text-color)"
+  wa-color-text-quiet: "var(--secondary-text-color)"
+  wa-color-neutral-fill-normal: "var(--secondary-background-color)"
+  ha-color-fill-primary-quiet-resting: "color-mix(in srgb, var(--primary-color) 15%, var(--card-background-color))"
+  ha-color-fill-primary-quiet-hover: "color-mix(in srgb, var(--primary-color) 25%, var(--card-background-color))"
+  entities-card-row-gap: "3px"
+  ha-card-border-color: "rgba(255, 255, 255, 0.10)"
+  ha-card-border-width: "1px"
+  ha-card-border-radius: "10px"
+  ha-card-box-shadow: "none"
+  divider-color: "rgba(255, 255, 255, 0.09)"
+  app-header-background-color: "transparent"
+  app-header-text-color: "#e7e5e1"
+  sidebar-background-color: "rgba(10, 14, 23, 0.72)"
+  sidebar-text-color: "#e7e5e1"
+  sidebar-icon-color: "#8b8d94"
+  sidebar-selected-icon-color: "#e8a33d"
+  sidebar-selected-text-color: "#e8a33d"
+  state-icon-color: "#8b8d94"
+  state-icon-active-color: "#e8a33d"
+  paper-item-icon-color: "#8b8d94"
+  paper-item-icon-active-color: "#e8a33d"
+  switch-checked-color: "#e8a33d"
+
+jarvis_kisa:
+  primary-color: "#7fb2c9"
+  accent-color: "#7fb2c9"
+  dark-primary-color: "#5d8ea3"
+  light-primary-color: "#a5cddf"
+  primary-text-color: "#dfe4e8"
+  secondary-text-color: "#8e9aa3"
+  disabled-text-color: "#68737b"
+  text-primary-color: "#171d22"
+  primary-background-color: "#2b343c"
+  secondary-background-color: "#171d22"
+  lovelace-background: "linear-gradient(180deg, #222a31 0%, #2b343c 40%, #171d22 100%) fixed"
+  ha-card-background: "rgba(255, 255, 255, 0.05)"
+  card-background-color: "#26313a"
+  ha-dialog-surface-background: "#26313a"
+  mdc-theme-surface: "#26313a"
+  wa-color-text-normal: "var(--primary-text-color)"
+  wa-color-text-quiet: "var(--secondary-text-color)"
+  wa-color-neutral-fill-normal: "var(--secondary-background-color)"
+  ha-color-fill-primary-quiet-resting: "color-mix(in srgb, var(--primary-color) 15%, var(--card-background-color))"
+  ha-color-fill-primary-quiet-hover: "color-mix(in srgb, var(--primary-color) 25%, var(--card-background-color))"
+  entities-card-row-gap: "3px"
+  ha-card-border-color: "rgba(255, 255, 255, 0.11)"
+  ha-card-border-width: "1px"
+  ha-card-border-radius: "10px"
+  ha-card-box-shadow: "none"
+  divider-color: "rgba(255, 255, 255, 0.10)"
+  app-header-background-color: "transparent"
+  app-header-text-color: "#dfe4e8"
+  sidebar-background-color: "rgba(23, 29, 34, 0.72)"
+  sidebar-text-color: "#dfe4e8"
+  sidebar-icon-color: "#8e9aa3"
+  sidebar-selected-icon-color: "#7fb2c9"
+  sidebar-selected-text-color: "#7fb2c9"
+  state-icon-color: "#8e9aa3"
+  state-icon-active-color: "#7fb2c9"
+  paper-item-icon-color: "#8e9aa3"
+  paper-item-icon-active-color: "#7fb2c9"
+  switch-checked-color: "#7fb2c9"

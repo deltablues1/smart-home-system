@@ -1,0 +1,21 @@
+# Wall panel session — goes to ~/.config/labwc/autostart
+#
+# The Raspberry Pi session runs `labwc -m`, and --merge-config means every
+# autostart file found is executed in turn, not just the first. So this file
+# ADDS to /etc/xdg/labwc/autostart rather than replacing it: the desktop, the
+# taskbar and kanshi are already started there and must not be repeated here,
+# or they would run twice.
+#
+# The desktop and taskbar therefore keep running underneath. That is deliberate
+# rather than merely tolerated: the browser covers them completely, and if it
+# ever does exit, what appears is a working desktop instead of a black screen.
+#
+# To undo all of this: delete this file and reboot. Nothing else was changed,
+# and nothing here needed root.
+
+# No physical keyboard on a wall. Squeekboard stays hidden until a text field
+# asks for it -- which is why Chromium is started with --enable-wayland-ime.
+/usr/bin/squeekboard &
+
+# The panel itself, brought back if it ever dies.
+/usr/bin/lwrespawn "$HOME/panel-kiosk.sh" &

@@ -1,0 +1,29 @@
+sensor:
+  - platform: rest
+    name: Google Clause Status
+    resource: http://rpi5-jarvis.local:8000/api/status
+    scan_interval: 60
+    headers:
+      Authorization: Bearer !secret google_clause_api_token
+    value_template: >
+      {% if value_json.services is defined %}
+        online
+      {% else %}
+        unknown
+      {% endif %}
+    json_attributes:
+      - deployment
+      - services
+
+rest_command:
+  google_clause_chat:
+    url: http://rpi5-jarvis.local:8000/api/chat
+    method: POST
+    headers:
+      Authorization: Bearer !secret google_clause_api_token
+      Content-Type: application/json
+    payload: >
+      {
+        "user_id": "ha-automation",
+        "message": {{ message | tojson }}
+      }

@@ -1,0 +1,662 @@
+substitutions:
+  node_name: bme280-mux-node
+  friendly_name: BME280 Mux Node
+  # Most GY-BME280 boards are 0x76 or 0x77.
+  # If ESPHome logs show only 0x77 behind the TCA channels, change this to 0x77.
+  bme280_address: "0x76"
+  # Set after comparing "ZMPT RMS sirovo" with a trusted multimeter.
+  # 233 V / 0.096 V RMS measured at ADS #2 A0 (after the 22k/22k divider).
+  voltage_calibration: "2427.1"
+  # Temporary PF used for an estimated W value. Resistive loads are close to 1.00.
+  assumed_power_factor: "1.00"
+
+esphome:
+  name: ${node_name}
+  friendly_name: ${friendly_name}
+
+external_components:
+  - source:
+      type: local
+      path: components
+    components: [phase_power]
+
+esp32:
+  board: esp32dev
+  framework:
+    type: arduino
+
+logger:
+  level: DEBUG
+
+api:
+  encryption:
+    key: !secret api_encryption_key
+
+ota:
+  - platform: esphome
+    password: !secret ota_password
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+  power_save_mode: none
+  fast_connect: true
+  # Fiksna adresa: HA-ova ESPHome veza pamti IP, pa mu promjena adrese
+  # (nakon nestanka struje i novog DHCP kruga) obori sve entitete.
+  manual_ip:
+    static_ip: 192.168.100.102
+    gateway: 192.168.100.1
+    subnet: 255.255.255.0
+    dns1: 192.168.100.1
+  ap:
+    ssid: "${friendly_name} Fallback"
+    password: !secret wifi_ap_password
+
+captive_portal:
+
+web_server:
+  port: 80
+  auth:
+    username: !secret web_server_username
+    password: !secret web_server_password
+
+# total_daily_energy needs to know when local midnight is. Time comes from Home
+# Assistant over the existing API connection rather than SNTP: no internet
+# dependency, and nothing new to reach on the network. If HA goes away the ESP32
+# keeps its own clock running, so counting continues through an outage -- only a
+# power cut while HA is also down would leave it without a reference.
+time:
+  - platform: homeassistant
+    id: node_time
+
+# Two separate I2C peripherals so the two loads never compete.
+i2c:
+  # Bus A: the two ADS1115 only. Short traces on the board, so it can run fast.
+  # This is what sets the sampling rate of the power measurement.
+  - id: i2c_power
+    sda: GPIO21
+    scl: GPIO22
+    scan: true
+    frequency: 400kHz
+
+  # Bus B: TCA9548A -> BME280 x5 and SPS30. Slow on purpose: SPS30 is specified
+  # for 100 kHz max, and the sensor runs are long (5-10 m). Nothing here needs
+  # speed - the fastest update interval is 30 s.
+  # 10 kHz, confirmed by measurement on 2026-08-15. At 50 kHz the SPS30 failed
+  # with ERROR_NOT_ACKNOWLEDGED while the BME280s on the same bus were fine:
+  # the GY-BME280 modules carry their own 10k pull-ups at the far cable end,
+  # the SPS30 is a bare sensor with none, so it is the first device to lose the
+  # rise-time budget on a long run. Dropping to 10 kHz brought it straight back
+  # (serial 8F66E4A835E65C40, fw v2.2).
+  #
+  # Kept at 10 kHz on purpose: nothing on this bus needs speed (BME280 every
+  # 60 s, SPS30 every 30 s) and the long sensor runs want all the margin they
+  # can get. Still fit 2.2k pull-ups on GPIO18/19 - at 10 kHz the ~4 us rise is
+  # only 4 % of a bit so it works, but there is no headroom for extra cable.
+  - id: i2c_sensors
+    sda: GPIO18
+    scl: GPIO19
+    scan: true
+    frequency: 10kHz
+
+# TCA9548A I2C multiplexer.
+# BME280 sensors can all use the same I2C address because each one is on a separate channel.
+tca9548a:
+  - id: tca_bme280
+    address: 0x70
+    i2c_id: i2c_sensors
+    channels:
+      - bus_id: tca_ch0_vanjska
+        channel: 0
+      - bus_id: tca_ch1_ulaz
+        channel: 1
+      - bus_id: tca_ch2_dnevni
+        channel: 2
+      - bus_id: tca_ch3_kupaona
+        channel: 3
+      - bus_id: tca_ch4_soba
+        channel: 4
+      # SPS30 air-quality sensor on mux channel 5.
+      - bus_id: tca_ch5_sps30
+        channel: 5
+
+# First ADS1115 on the main I2C bus (ADDR -> GND = 0x48).
+# A0 = SCT-013 signal, A1 = VBIAS (~1.65 V), measured differentially.
+# Second ADS1115 (ADDR -> 3.3 V = 0x49) carries the ZMPT101B mains voltage.
+#
+# Which clamp is where (verified 2026-09-12 against live readings):
+#   channel 1, A0-A3 . "Kat"         - the upstairs sub-feed
+#   channel 2, A2-A3 . "Kuca ukupno" - the incomer, so it reads the whole house
+# Ground floor is not measured: it is the difference of the two, published
+# below as a template sensor. Only REAL power subtracts honestly - see there.
+phase_power:
+  id: phase_power_test
+  i2c_id: i2c_power
+  current_address: 0x48
+  voltage_address: 0x49
+  voltage_calibration: ${voltage_calibration}
+  # SCT-013-000 is 100 A : 50 mA (2000:1), so A-per-volt = 2000 / burden.
+  # 47 ohm burden -> 42.553 A/V, full scale ~49.7 A against the 3.3 V rail.
+  # Both channels must use the same burden value so one phase correction fits.
+  current_calibration: 42.553
+  # ADS #1 (SCT) ALERT/RDY -> GPIO33; ADS #2 (ZMPT) ALERT/RDY -> GPIO32.
+  # ESP32 internal pull-ups are enabled by the pin modes below.
+  current_rdy_pin:
+    number: GPIO33
+    mode:
+      input: true
+      pullup: true
+  voltage_rdy_pin:
+    number: GPIO32
+    mode:
+      input: true
+      pullup: true
+  # Baseline run: retain the original SCT polarity while we capture a sync log.
+  # SCT polarity was verified with a resistive kettle: invert so import is +W.
+  invert_current: true
+  minimum_current: 0.05
+  # Voltage is taken this much earlier than the current sample it is paired
+  # with. A resistive load must add no reactive power: at -1280 the 56 boiler
+  # and kettle steps of 2026-09-13 still read as a 7.4 deg lag (upstairs 7.0)
+  # and the house under-read the utility meter by 6 %. 7.4 deg at 50 Hz is
+  # 411 us more. Check after flashing: step angle ~0, meter within ~1 %.
+  voltage_lag_correction_us: -1690
+  samples_per_result: 800
+  rms_voltage:
+    name: "Mrezni napon"
+    accuracy_decimals: 1
+  rms_current:
+    name: "Kat struja"
+    accuracy_decimals: 2
+  real_power:
+    name: "Kat stvarna snaga"
+    id: p_kat
+    accuracy_decimals: 1
+  apparent_power:
+    name: "Kat prividna snaga"
+    accuracy_decimals: 1
+  power_factor:
+    name: "Kat faktor snage"
+    accuracy_decimals: 3
+  # Second SCT-013-000 on the same ADS1115, mux A2-A3. The mux moves once per
+  # completed batch, so this channel is sampled at the full 860 SPS but its
+  # value refreshes every other batch (~2 s instead of ~1 s).
+  # Use the SAME burden resistor value as channel 1 so both share one phase
+  # correction.
+  current_channel_2:
+    # Both clamps were measured on the same conductor across six loads spanning
+    # 0.128-7.53 A: channel 2 read 1.011x high with the ratio constant to
+    # +/-0.3 % over that 59:1 range. Crosstalk was ruled out separately - with
+    # either clamp removed both channels fall to zero. So this is a genuine
+    # gain difference between the two clamps: 42.553 / 1.011.
+    current_calibration: 42.09
+    invert_current: true
+    rms_current:
+      name: "Kuca ukupno struja"
+      accuracy_decimals: 2
+    real_power:
+      name: "Kuca ukupno stvarna snaga"
+      id: p_ukupno
+      accuracy_decimals: 1
+    apparent_power:
+      name: "Kuca ukupno prividna snaga"
+      accuracy_decimals: 1
+    power_factor:
+      name: "Kuca ukupno faktor snage"
+      accuracy_decimals: 3
+
+sensor:
+  # Ground floor is not its own clamp: it is what the house draws minus what
+  # the upstairs feed draws.
+  #
+  # REAL power (W) is the only quantity that may be subtracted like this. It is
+  # additive because it is an average of v*i over the cycle, so the two feeds
+  # sum regardless of their phase angles. RMS current and apparent power are
+  # NOT additive - two 5 A loads at different power factors do not draw 10 A
+  # from the incomer - so there is deliberately no "Prizemlje struja" here.
+  #
+  # The two channels alternate about once a second, so the two states are up to
+  # ~1 s apart. A large load switching on can make the difference dip negative
+  # for one reading; that is the sampling skew, not a measurement fault, and it
+  # is left visible rather than clamped to zero so a real calibration error
+  # (a persistent negative) stays findable.
+  - platform: template
+    name: "Prizemlje stvarna snaga"
+    id: p_prizemlje
+    unit_of_measurement: "W"
+    device_class: power
+    state_class: measurement
+    accuracy_decimals: 1
+    update_interval: 5s
+    lambda: |-
+      if (!id(p_ukupno).has_state() || !id(p_kat).has_state())
+        return {};
+      if (isnan(id(p_ukupno).state) || isnan(id(p_kat).state))
+        return {};
+      return id(p_ukupno).state - id(p_kat).state;
+
+  # Energy counted on the node itself, not only in Home Assistant.
+  #
+  # The HA integration helpers stop counting whenever the node loses Wi-Fi or HA
+  # restarts, and that gap is gone for good. total_daily_energy integrates on the
+  # ESP32 and keeps the running total in flash (restore defaults to true), so a
+  # dropped link costs nothing: HA reads the accumulated figure when it comes
+  # back. It resets at local midnight, which is why it does not replace the HA
+  # helpers -- those are the ones the meter comparison needs, because they never
+  # reset. Together: the helpers give the long total, these survive an outage.
+  - platform: total_daily_energy
+    name: "Kuca ukupno dnevno"
+    power_id: p_ukupno
+    unit_of_measurement: kWh
+    accuracy_decimals: 3
+    filters:
+      - multiply: 0.001
+
+  - platform: total_daily_energy
+    name: "Kat dnevno"
+    power_id: p_kat
+    unit_of_measurement: kWh
+    accuracy_decimals: 3
+    filters:
+      - multiply: 0.001
+
+  - platform: total_daily_energy
+    name: "Prizemlje dnevno"
+    power_id: p_prizemlje
+    unit_of_measurement: kWh
+    accuracy_decimals: 3
+    filters:
+      - multiply: 0.001
+
+  # Differential voltage between SCT SIGNAL (A0) and VBIAS (A1).
+  # RMS current from SCT-013-000 (100 A : 50 mA) with a 100 ohm burden.
+  # 1 V RMS on the burden ~ 20 A, hence multiply: 20.
+  # 400 ms sample window = 20 full 50 Hz mains periods.
+  # ZMPT OUT -> 22k -> ADS A0, with another 22k from A0 to GND.
+  # A1 is tied to GND. The RMS algorithm removes ZMPT's DC offset.
+  # RMS voltage × RMS current. This is apparent power (VA), not real power (W).
+  # Estimate only: W = Vrms × Irms × assumed PF. True W needs phase-synchronised samples.
+  - platform: bme280_i2c
+    id: bme280_vanjska
+    i2c_id: tca_ch0_vanjska
+    address: ${bme280_address}
+    update_interval: 60s
+    temperature:
+      name: "Vanjska temperatura"
+      oversampling: 16x
+      filters:
+        # Odbaci reset-vrijednosti registara: kad citanje preko TCA9548A
+        # kanala ne prodje, BME280 vrati svoje pocetne registre, sto se
+        # kompenzira u dvije fiksne besmislice po senzoru (izmjereno
+        # 2026-08-20: kupaona 188.5 / -57.6, soba 187.4 / -59.4). Vlaga i tlak
+        # imaju iste takve vrijednosti: vlaga tocno 0.0 i 100.0 %, tlak oko
+        # 496-519 hPa i 1240-1253 hPa (izmjereno 22.08. nakon prvog flasha).
+        - lambda: |-
+            if (x < -40 || x > 85) {
+              ESP_LOGW("bme280_range", "Vanjska temperatura: odbaceno %.2f", x);
+              return {};
+            }
+            return x;
+    humidity:
+      name: "Vanjska vlaga"
+      oversampling: 16x
+      filters:
+        # Odbaci reset-vrijednosti registara: kad citanje preko TCA9548A
+        # kanala ne prodje, BME280 vrati svoje pocetne registre, sto se
+        # kompenzira u dvije fiksne besmislice po senzoru (izmjereno
+        # 2026-08-20: kupaona 188.5 / -57.6, soba 187.4 / -59.4). Vlaga i tlak
+        # imaju iste takve vrijednosti: vlaga tocno 0.0 i 100.0 %, tlak oko
+        # 496-519 hPa i 1240-1253 hPa (izmjereno 22.08. nakon prvog flasha).
+        - lambda: |-
+            if (x <= 0 || x >= 100) {
+              ESP_LOGW("bme280_range", "Vanjska vlaga: odbaceno %.2f", x);
+              return {};
+            }
+            return x;
+    pressure:
+      name: "Vanjski tlak"
+      oversampling: 16x
+      filters:
+        # Odbaci reset-vrijednosti registara: kad citanje preko TCA9548A
+        # kanala ne prodje, BME280 vrati svoje pocetne registre, sto se
+        # kompenzira u dvije fiksne besmislice po senzoru (izmjereno
+        # 2026-08-20: kupaona 188.5 / -57.6, soba 187.4 / -59.4). Vlaga i tlak
+        # imaju iste takve vrijednosti: vlaga tocno 0.0 i 100.0 %, tlak oko
+        # 496-519 hPa i 1240-1253 hPa (izmjereno 22.08. nakon prvog flasha).
+        - lambda: |-
+            if (x < 850 || x > 1085) {
+              ESP_LOGW("bme280_range", "Vanjski tlak: odbaceno %.2f", x);
+              return {};
+            }
+            return x;
+    iir_filter: 4x
+
+  - platform: bme280_i2c
+    id: bme280_ulaz
+    i2c_id: tca_ch1_ulaz
+    address: ${bme280_address}
+    update_interval: 60s
+    temperature:
+      name: "Ulaz temperatura"
+      oversampling: 16x
+      filters:
+        # Odbaci reset-vrijednosti registara: kad citanje preko TCA9548A
+        # kanala ne prodje, BME280 vrati svoje pocetne registre, sto se
+        # kompenzira u dvije fiksne besmislice po senzoru (izmjereno
+        # 2026-08-20: kupaona 188.5 / -57.6, soba 187.4 / -59.4). Vlaga i tlak
+        # imaju iste takve vrijednosti: vlaga tocno 0.0 i 100.0 %, tlak oko
+        # 496-519 hPa i 1240-1253 hPa (izmjereno 22.08. nakon prvog flasha).
+        - lambda: |-
+            if (x < -40 || x > 85) {
+              ESP_LOGW("bme280_range", "Ulaz temperatura: odbaceno %.2f", x);
+              return {};
+            }
+            return x;
+    humidity:
+      name: "Ulaz vlaga"
+      oversampling: 16x
+      filters:
+        # Odbaci reset-vrijednosti registara: kad citanje preko TCA9548A
+        # kanala ne prodje, BME280 vrati svoje pocetne registre, sto se
+        # kompenzira u dvije fiksne besmislice po senzoru (izmjereno
+        # 2026-08-20: kupaona 188.5 / -57.6, soba 187.4 / -59.4). Vlaga i tlak
+        # imaju iste takve vrijednosti: vlaga tocno 0.0 i 100.0 %, tlak oko
+        # 496-519 hPa i 1240-1253 hPa (izmjereno 22.08. nakon prvog flasha).
+        - lambda: |-
+            if (x <= 0 || x >= 100) {
+              ESP_LOGW("bme280_range", "Ulaz vlaga: odbaceno %.2f", x);
+              return {};
+            }
+            return x;
+    pressure:
+      name: "Ulaz tlak"
+      oversampling: 16x
+      filters:
+        # Odbaci reset-vrijednosti registara: kad citanje preko TCA9548A
+        # kanala ne prodje, BME280 vrati svoje pocetne registre, sto se
+        # kompenzira u dvije fiksne besmislice po senzoru (izmjereno
+        # 2026-08-20: kupaona 188.5 / -57.6, soba 187.4 / -59.4). Vlaga i tlak
+        # imaju iste takve vrijednosti: vlaga tocno 0.0 i 100.0 %, tlak oko
+        # 496-519 hPa i 1240-1253 hPa (izmjereno 22.08. nakon prvog flasha).
+        - lambda: |-
+            if (x < 850 || x > 1085) {
+              ESP_LOGW("bme280_range", "Ulaz tlak: odbaceno %.2f", x);
+              return {};
+            }
+            return x;
+    iir_filter: 4x
+
+  - platform: bme280_i2c
+    id: bme280_dnevni
+    i2c_id: tca_ch2_dnevni
+    address: ${bme280_address}
+    update_interval: 60s
+    temperature:
+      name: "Dnevni prostor temperatura"
+      oversampling: 16x
+      filters:
+        # Odbaci reset-vrijednosti registara: kad citanje preko TCA9548A
+        # kanala ne prodje, BME280 vrati svoje pocetne registre, sto se
+        # kompenzira u dvije fiksne besmislice po senzoru (izmjereno
+        # 2026-08-20: kupaona 188.5 / -57.6, soba 187.4 / -59.4). Vlaga i tlak
+        # imaju iste takve vrijednosti: vlaga tocno 0.0 i 100.0 %, tlak oko
+        # 496-519 hPa i 1240-1253 hPa (izmjereno 22.08. nakon prvog flasha).
+        - lambda: |-
+            if (x < -40 || x > 85) {
+              ESP_LOGW("bme280_range", "Dnevni prostor temperatura: odbaceno %.2f", x);
+              return {};
+            }
+            return x;
+    humidity:
+      name: "Dnevni prostor vlaga"
+      oversampling: 16x
+      filters:
+        # Odbaci reset-vrijednosti registara: kad citanje preko TCA9548A
+        # kanala ne prodje, BME280 vrati svoje pocetne registre, sto se
+        # kompenzira u dvije fiksne besmislice po senzoru (izmjereno
+        # 2026-08-20: kupaona 188.5 / -57.6, soba 187.4 / -59.4). Vlaga i tlak
+        # imaju iste takve vrijednosti: vlaga tocno 0.0 i 100.0 %, tlak oko
+        # 496-519 hPa i 1240-1253 hPa (izmjereno 22.08. nakon prvog flasha).
+        - lambda: |-
+            if (x <= 0 || x >= 100) {
+              ESP_LOGW("bme280_range", "Dnevni prostor vlaga: odbaceno %.2f", x);
+              return {};
+            }
+            return x;
+    pressure:
+      name: "Dnevni prostor tlak"
+      oversampling: 16x
+      filters:
+        # Odbaci reset-vrijednosti registara: kad citanje preko TCA9548A
+        # kanala ne prodje, BME280 vrati svoje pocetne registre, sto se
+        # kompenzira u dvije fiksne besmislice po senzoru (izmjereno
+        # 2026-08-20: kupaona 188.5 / -57.6, soba 187.4 / -59.4). Vlaga i tlak
+        # imaju iste takve vrijednosti: vlaga tocno 0.0 i 100.0 %, tlak oko
+        # 496-519 hPa i 1240-1253 hPa (izmjereno 22.08. nakon prvog flasha).
+        - lambda: |-
+            if (x < 850 || x > 1085) {
+              ESP_LOGW("bme280_range", "Dnevni prostor tlak: odbaceno %.2f", x);
+              return {};
+            }
+            return x;
+    iir_filter: 4x
+
+  - platform: bme280_i2c
+    id: bme280_kupaona
+    i2c_id: tca_ch3_kupaona
+    address: ${bme280_address}
+    update_interval: 60s
+    temperature:
+      name: "Kupaona temperatura"
+      oversampling: 16x
+      filters:
+        # Odbaci reset-vrijednosti registara: kad citanje preko TCA9548A
+        # kanala ne prodje, BME280 vrati svoje pocetne registre, sto se
+        # kompenzira u dvije fiksne besmislice po senzoru (izmjereno
+        # 2026-08-20: kupaona 188.5 / -57.6, soba 187.4 / -59.4). Vlaga i tlak
+        # imaju iste takve vrijednosti: vlaga tocno 0.0 i 100.0 %, tlak oko
+        # 496-519 hPa i 1240-1253 hPa (izmjereno 22.08. nakon prvog flasha).
+        - lambda: |-
+            if (x < -40 || x > 85) {
+              ESP_LOGW("bme280_range", "Kupaona temperatura: odbaceno %.2f", x);
+              return {};
+            }
+            return x;
+    humidity:
+      name: "Kupaona vlaga"
+      oversampling: 16x
+      filters:
+        # Odbaci reset-vrijednosti registara: kad citanje preko TCA9548A
+        # kanala ne prodje, BME280 vrati svoje pocetne registre, sto se
+        # kompenzira u dvije fiksne besmislice po senzoru (izmjereno
+        # 2026-08-20: kupaona 188.5 / -57.6, soba 187.4 / -59.4). Vlaga i tlak
+        # imaju iste takve vrijednosti: vlaga tocno 0.0 i 100.0 %, tlak oko
+        # 496-519 hPa i 1240-1253 hPa (izmjereno 22.08. nakon prvog flasha).
+        - lambda: |-
+            if (x <= 0 || x >= 100) {
+              ESP_LOGW("bme280_range", "Kupaona vlaga: odbaceno %.2f", x);
+              return {};
+            }
+            return x;
+    pressure:
+      name: "Kupaona tlak"
+      oversampling: 16x
+      filters:
+        # Odbaci reset-vrijednosti registara: kad citanje preko TCA9548A
+        # kanala ne prodje, BME280 vrati svoje pocetne registre, sto se
+        # kompenzira u dvije fiksne besmislice po senzoru (izmjereno
+        # 2026-08-20: kupaona 188.5 / -57.6, soba 187.4 / -59.4). Vlaga i tlak
+        # imaju iste takve vrijednosti: vlaga tocno 0.0 i 100.0 %, tlak oko
+        # 496-519 hPa i 1240-1253 hPa (izmjereno 22.08. nakon prvog flasha).
+        - lambda: |-
+            if (x < 850 || x > 1085) {
+              ESP_LOGW("bme280_range", "Kupaona tlak: odbaceno %.2f", x);
+              return {};
+            }
+            return x;
+    iir_filter: 4x
+
+  - platform: bme280_i2c
+    id: bme280_soba
+    i2c_id: tca_ch4_soba
+    address: ${bme280_address}
+    update_interval: 60s
+    temperature:
+      name: "Soba temperatura"
+      oversampling: 16x
+      filters:
+        # Odbaci reset-vrijednosti registara: kad citanje preko TCA9548A
+        # kanala ne prodje, BME280 vrati svoje pocetne registre, sto se
+        # kompenzira u dvije fiksne besmislice po senzoru (izmjereno
+        # 2026-08-20: kupaona 188.5 / -57.6, soba 187.4 / -59.4). Vlaga i tlak
+        # imaju iste takve vrijednosti: vlaga tocno 0.0 i 100.0 %, tlak oko
+        # 496-519 hPa i 1240-1253 hPa (izmjereno 22.08. nakon prvog flasha).
+        - lambda: |-
+            if (x < -40 || x > 85) {
+              ESP_LOGW("bme280_range", "Soba temperatura: odbaceno %.2f", x);
+              return {};
+            }
+            return x;
+    humidity:
+      name: "Soba vlaga"
+      oversampling: 16x
+      filters:
+        # Odbaci reset-vrijednosti registara: kad citanje preko TCA9548A
+        # kanala ne prodje, BME280 vrati svoje pocetne registre, sto se
+        # kompenzira u dvije fiksne besmislice po senzoru (izmjereno
+        # 2026-08-20: kupaona 188.5 / -57.6, soba 187.4 / -59.4). Vlaga i tlak
+        # imaju iste takve vrijednosti: vlaga tocno 0.0 i 100.0 %, tlak oko
+        # 496-519 hPa i 1240-1253 hPa (izmjereno 22.08. nakon prvog flasha).
+        - lambda: |-
+            if (x <= 0 || x >= 100) {
+              ESP_LOGW("bme280_range", "Soba vlaga: odbaceno %.2f", x);
+              return {};
+            }
+            return x;
+    pressure:
+      name: "Soba tlak"
+      oversampling: 16x
+      filters:
+        # Odbaci reset-vrijednosti registara: kad citanje preko TCA9548A
+        # kanala ne prodje, BME280 vrati svoje pocetne registre, sto se
+        # kompenzira u dvije fiksne besmislice po senzoru (izmjereno
+        # 2026-08-20: kupaona 188.5 / -57.6, soba 187.4 / -59.4). Vlaga i tlak
+        # imaju iste takve vrijednosti: vlaga tocno 0.0 i 100.0 %, tlak oko
+        # 496-519 hPa i 1240-1253 hPa (izmjereno 22.08. nakon prvog flasha).
+        - lambda: |-
+            if (x < 850 || x > 1085) {
+              ESP_LOGW("bme280_range", "Soba tlak: odbaceno %.2f", x);
+              return {};
+            }
+            return x;
+    iir_filter: 4x
+
+  - platform: wifi_signal
+    name: "BME280 Mux WiFi signal"
+    update_interval: 60s
+    entity_category: diagnostic
+
+  - platform: uptime
+    name: "BME280 Mux uptime"
+    update_interval: 60s
+    entity_category: diagnostic
+
+  - platform: internal_temperature
+    name: "BME280 Mux temperatura cipa"
+    entity_category: diagnostic
+
+  - platform: debug
+    free:
+      name: "BME280 Mux slobodna memorija"
+      entity_category: diagnostic
+    loop_time:
+      name: "BME280 Mux loop time"
+      entity_category: diagnostic
+
+  # SPS30 air-quality sensor on TCA9548A channel 5.
+  # Powered from 5 V, SEL pin to GND selects I2C mode (address 0x69).
+  # Factory auto-clean runs after 168 h of continuous operation; the interval
+  # is not configurable in the current ESPHome component, so it is omitted here.
+  - platform: sps30
+    id: sps30_air
+    i2c_id: tca_ch5_sps30
+    address: 0x69
+    update_interval: 30s
+    pm_1_0:
+      name: "Kvaliteta zraka PM1"
+    pm_2_5:
+      name: "Kvaliteta zraka PM2.5"
+    pm_4_0:
+      name: "Kvaliteta zraka PM4"
+    pm_10_0:
+      name: "Kvaliteta zraka PM10"
+    pmc_0_5:
+      name: "Broj cestica PM0.5"
+    pmc_1_0:
+      name: "Broj cestica PM1"
+    pmc_2_5:
+      name: "Broj cestica PM2.5"
+    pmc_4_0:
+      name: "Broj cestica PM4"
+    pmc_10_0:
+      name: "Broj cestica PM10"
+    pm_size:
+      name: "Prosjecna velicina cestica"
+
+button:
+  - platform: template
+    name: "SPS30 pokreni ciscenje"
+    on_press:
+      - sps30.start_fan_autoclean: sps30_air
+
+  - platform: restart
+    name: "BME280 Mux restart"
+    entity_category: config
+
+  - platform: safe_mode
+    name: "BME280 Mux safe mode"
+    entity_category: config
+
+# Dijagnostika SPS30. ESPHome driver cita samo "data ready" (0x0202), a senzor
+# ima i registar stanja (0xD206) s bitovima za kvar ventilatora, kvar lasera i
+# brzinu ventilatora izvan raspona. Bez toga se pokvaren ventilator ne moze
+# razlikovati od zaprljane optike, a to je razlika izmedu reklamacije i smeca.
+# Ispisuje se svakih 5 minuta:  esphome logs ... | findstr sps30_status
+interval:
+  - interval: 300s
+    then:
+      - lambda: |-
+          static const char *const TAG = "sps30_status";
+          uint8_t cmd[2] = {0xD2, 0x06};
+          if (id(sps30_air)->write(cmd, 2) != i2c::ERROR_OK) {
+            ESP_LOGW(TAG, "ne mogu poslati upit za status");
+            return;
+          }
+          delay(20);
+          uint8_t buf[6];
+          if (id(sps30_air)->read(buf, 6) != i2c::ERROR_OK) {
+            ESP_LOGW(TAG, "ne mogu procitati registar stanja");
+            return;
+          }
+          uint32_t st = ((uint32_t) buf[0] << 24) | ((uint32_t) buf[1] << 16) |
+                        ((uint32_t) buf[3] << 8)  | (uint32_t) buf[4];
+          ESP_LOGI(TAG,
+                   "status=0x%08X  ventilator_kvar=%u  laser_kvar=%u  brzina_izvan_raspona=%u",
+                   (unsigned) st, (unsigned) ((st >> 4) & 1), (unsigned) ((st >> 5) & 1),
+                   (unsigned) ((st >> 21) & 1));
+
+# Trigger the two RMS voltage calculations together every five seconds.
+
+# IP i razlog zadnjeg reseta: razlikuju "pala je veza" od "plocica se resetirala".
+text_sensor:
+  - platform: wifi_info
+    ip_address:
+      name: "BME280 Mux IP"
+      entity_category: diagnostic
+  - platform: debug
+    reset_reason:
+      name: "BME280 Mux razlog reseta"
+      entity_category: diagnostic
+
+debug:
+  update_interval: 60s

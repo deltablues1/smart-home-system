@@ -1,0 +1,18 @@
+[Unit]
+Description=Jarvis ADK Wakeword Interface (openWakeWord "hey jarvis")
+After=network-online.target adk-web.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+# See adk-web.service: no User= means root. The wakeword loop needs the audio
+# group for the wm8960 HAT, not privilege.
+User=raspberrypijarvis
+WorkingDirectory=/home/raspberrypijarvis/google_claude
+EnvironmentFile=/home/raspberrypijarvis/google_claude/.env
+ExecStart=/home/raspberrypijarvis/google_claude/.venv/bin/python scripts/run_wakeword.py --wakeword
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

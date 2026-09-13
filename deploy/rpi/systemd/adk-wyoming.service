@@ -1,0 +1,22 @@
+[Unit]
+Description=Jarvis Wyoming bridge (STT/TTS for Home Assistant)
+After=network-online.target adk-web.service
+Wants=network-online.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+User=raspberrypijarvis
+WorkingDirectory=/home/raspberrypijarvis/google_claude
+EnvironmentFile=/home/raspberrypijarvis/google_claude/.env
+ExecStart=/home/raspberrypijarvis/google_claude/.venv/bin/python scripts/run_wyoming.py
+Restart=always
+RestartSec=5
+TimeoutStopSec=30
+
+# Heartbeat only while the server is actually serving.
+WatchdogSec=180
+NotifyAccess=main
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,557 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ADK Dashboard</title>
+    <link rel="stylesheet" href="/static/style.css?v=12">
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.8/dist/cdn.min.js"></script>
+</head>
+<body x-data="dashboard()" x-init="init()">
+
+    <!-- SIDEBAR -->
+    <aside class="sidebar">
+        <div class="sidebar-header">
+            <h1>ADK Dashboard</h1>
+            <div class="subtitle">Google Workspace Multi-Agent</div>
+            <div class="status-badge"
+                 :class="systemStatus.status === 'running' ? 'online' : 'offline'"
+                 x-text="systemStatus.status || 'connecting...'">
+            </div>
+        </div>
+
+        <!-- Sessions -->
+        <div class="sidebar-section">
+            <h3>Sessions (<span x-text="sessions.length"></span>)</h3>
+            <ul>
+                <template x-for="s in sessions" :key="s.session_id">
+                    <li @click="switchSession(s)"
+                        :class="{ active: s.session_id === currentSessionId }"
+                        :title="s.session_id">
+                        <span>
+                            <span x-show="s.active" style="color:var(--success);font-size:8px;">&#9679; </span>
+                            <span x-text="formatSessionName(s)"></span>
+                        </span>
+                        <small x-text="s.message_count + ' msg'"></small>
+                    </li>
+                </template>
+            </ul>
+            <template x-if="sessions.length === 0">
+                <p style="font-size:12px;color:var(--text-muted);padding:4px 8px;">No sessions yet</p>
+            </template>
+            <button class="btn-new-session" @click="newSession()">+ New Session</button>
+        </div>
+
+        <!-- Agents -->
+        <div class="sidebar-section" style="flex:1;overflow-y:auto;">
+            <h3>Agents (<span x-text="agents.length"></span>)</h3>
+            <ul>
+                <template x-for="a in agents" :key="a.name">
+                    <li class="agent-item">
+                        <span class="agent-name" x-text="a.name"></span>
+                        <span class="agent-model" x-text="a.model"></span>
+                    </li>
+                </template>
+            </ul>
+        </div>
+    </aside>
+
+    <!-- CHAT PANEL -->
+    <main class="chat-panel">
+        <div class="chat-header">
+            <h2>
+                <span x-text="currentSessionId ? currentSessionId.split('-').slice(0,3).join('-') : 'No session'"></span>
+            </h2>
+            <div style="display:flex;align-items:center;gap:8px;">
+                <span class="mode-badge" x-text="systemStatus.active_mode || 'LEGACY'"></span>
+                <button class="cost-tab-btn"
+                        :class="{ active: showCostTab }"
+                        @click="showCostTab = !showCostTab; if(showCostTab) loadStatus()">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+                    </svg>
+                    Troškovi
+                </button>
+            </div>
+        </div>
+
+        <!-- HITL pending approvals banner -->
+        <template x-if="pendingApprovals.length > 0">
+            <div class="hitl-banner">
+                <span class="hitl-icon">&#9888;</span>
+                <span>
+                    <strong x-text="pendingApprovals.length"></strong>
+                    pending approval<span x-show="pendingApprovals.length > 1">s</span>
+                    waiting for your review
+                </span>
+                <template x-for="a in pendingApprovals" :key="a.confirmation_id">
+                    <button class="hitl-review-btn" @click="openHITLModal(a)">
+                        Review: <span x-text="a.invoice_summary?.invoice_number || a.confirmation_id"></span>
+                    </button>
+                </template>
+            </div>
+        </template>
+
+        <div class="messages" x-ref="messagesContainer"
+             @dragover.prevent="dragOver = true"
+             @dragleave.prevent="dragOver = false"
+             @drop.prevent="handleDrop($event)"
+             :class="{ 'drag-over': dragOver }">
+            <!-- Empty state -->
+            <template x-if="messages.length === 0 && !streaming">
+                <div class="empty-state">
+                    <div class="icon">&#9672;</div>
+                    <p>Send a message to start</p>
+                    <p style="font-size:12px;margin-top:4px;">You can drag & drop images here for OCR</p>
+                </div>
+            </template>
+
+            <!-- Messages -->
+            <template x-for="(msg, idx) in messages" :key="idx">
+                <div class="message" :class="msg.role">
+                    <div class="message-role" x-text="msg.role"></div>
+                    <!-- Attached image (user uploads) -->
+                    <template x-if="msg.attachments && msg.attachments.length > 0">
+                        <div class="message-attachments">
+                            <template x-for="att in msg.attachments" :key="att.file_id">
+                                <div class="attachment-preview">
+                                    <img :src="att.url" :alt="att.filename"
+                                         @click="openImageModal(att.url)">
+                                    <span class="att-name" x-text="att.filename"></span>
+                                </div>
+                            </template>
+                        </div>
+                    </template>
+                    <div class="message-content" x-html="formatMessage(msg.content)"></div>
+                </div>
+            </template>
+
+            <!-- Streaming message -->
+            <template x-if="streaming && streamBuffer">
+                <div class="message assistant">
+                    <div class="message-role">assistant <span class="streaming-indicator">streaming...</span></div>
+                    <div class="message-content" x-html="formatMessage(streamBuffer)"></div>
+                </div>
+            </template>
+
+            <!-- Streaming indicator (no content yet) -->
+            <template x-if="streaming && !streamBuffer">
+                <div class="message assistant">
+                    <div class="message-role">assistant</div>
+                    <div class="streaming-indicator">Thinking...</div>
+                </div>
+            </template>
+        </div>
+
+        <!-- Upload preview bar -->
+        <div class="upload-preview-bar" x-show="pendingFiles.length > 0">
+            <template x-for="(pf, idx) in pendingFiles" :key="idx">
+                <div class="upload-thumb">
+                    <img :src="pf.previewUrl" :alt="pf.file.name" x-show="pf.previewUrl">
+                    <span x-show="!pf.previewUrl" class="file-icon">PDF</span>
+                    <button class="remove-file" @click="removePendingFile(idx)" title="Remove">&times;</button>
+                    <div class="upload-progress" x-show="pf.uploading">
+                        <div class="upload-progress-bar"></div>
+                    </div>
+                </div>
+            </template>
+        </div>
+
+        <!-- Voice listening indicator -->
+        <div class="voice-status" x-show="voiceListening" x-cloak>
+            <span class="voice-pulse"></span>
+            <span>Listening...</span>
+        </div>
+        <!-- Gemini Live indicator -->
+        <div class="voice-status live-status" x-show="liveConnected" x-cloak>
+            <span class="live-pulse"></span>
+            <span>Gemini Live</span>
+            <span x-show="liveTranscript" x-text="'— ' + liveTranscript" class="live-transcript-inline"></span>
+        </div>
+
+        <form class="chat-input" @submit.prevent="sendMessage()">
+            <label class="attach-btn" title="Attach image or PDF">
+                <input type="file" accept="image/*,.pdf" multiple
+                       @change="handleFileSelect($event)" style="display:none;">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
+                </svg>
+            </label>
+            <button type="button" class="voice-btn"
+                    @click="toggleListening()"
+                    :class="{ listening: voiceListening, unsupported: !voiceSupported }"
+                    :disabled="!voiceSupported || streaming || liveConnected"
+                    :title="voiceSupported ? (voiceListening ? 'Stop listening' : 'Voice input') : 'Browser ne podrzava glasovni unos'">
+                <span class="voice-btn-icon" x-text="voiceListening ? '&#9632;' : '&#127908;'"></span>
+                <span class="voice-btn-label" x-text="voiceListening ? 'STOP' : 'MIC'"></span>
+            </button>
+            <button type="button" class="live-btn"
+                    @click="toggleLiveVoice()"
+                    :class="{ active: liveConnected }"
+                    :disabled="voiceListening"
+                    title="Gemini 3.1 Flash Live — real-time glasovni razgovor">
+                <span class="live-btn-icon">&#127757;</span>
+                <span class="live-btn-label" x-text="liveConnected ? 'LIVE ON' : 'LIVE'"></span>
+            </button>
+            <input type="text"
+                   x-model="inputMessage"
+                   placeholder="Type your message... (or drop images here)"
+                   :disabled="streaming"
+                   x-ref="chatInput">
+            <button type="button" class="tts-toggle"
+                    @click="voiceEnabled = !voiceEnabled; if(!voiceEnabled) stopSpeaking()"
+                    :class="{ active: voiceEnabled }"
+                    :disabled="!ttsSupported"
+                    :title="voiceEnabled ? 'TTS uključen - klikni za isključiti' : 'TTS isključen - klikni za uključiti'">
+                <span class="tts-icon" x-text="voiceEnabled ? '&#128266;' : '&#128264;'"></span>
+                <span class="tts-label" x-text="voiceEnabled ? 'TTS ON' : 'TTS'"></span>
+            </button>
+            <button type="submit" :disabled="streaming || (!inputMessage.trim() && pendingFiles.length === 0)">
+                <span x-show="!streaming">Send</span>
+                <span x-show="streaming">...</span>
+            </button>
+        </form>
+    </main>
+
+    <!-- TRACE PANEL -->
+    <aside class="trace-panel">
+        <!-- Agent Trace -->
+        <div class="trace-section" style="flex:1;overflow-y:auto;">
+            <h3>Agent Trace</h3>
+            <div class="trace-list">
+                <template x-if="traceEvents.length === 0">
+                    <p class="trace-empty">No tool calls yet</p>
+                </template>
+                <template x-for="(t, idx) in traceEvents" :key="idx">
+                    <div class="trace-event" :class="t.type">
+                        <div class="trace-header">
+                            <span class="trace-badge"
+                                  :class="t.type === 'tool_call' ? 'call' : 'resp'"
+                                  x-text="t.type === 'tool_call' ? 'CALL' : 'RESP'"></span>
+                            <span class="trace-name" x-text="t.name"></span>
+                            <span class="trace-author" x-text="t.author"></span>
+                        </div>
+                        <div class="trace-detail"
+                             x-show="t.type === 'tool_call' && t.args"
+                             x-text="t.args"></div>
+                        <div class="trace-detail"
+                             x-show="t.type === 'tool_response' && t.result"
+                             x-text="t.result"></div>
+                    </div>
+                </template>
+            </div>
+        </div>
+
+        <!-- Cost & Quota Monitor -->
+        <div class="trace-section">
+            <h3>Troškovi & Kvota</h3>
+            <div class="cost-grid">
+                <div class="cost-item">
+                    <span class="cost-label">TTS pozivi</span>
+                    <span class="cost-value" x-text="costs.tts?.calls || 0"></span>
+                </div>
+                <div class="cost-item">
+                    <span class="cost-label">TTS trošak</span>
+                    <span class="cost-value" x-text="'$' + (costs.tts?.cost_usd || 0).toFixed(4)"></span>
+                </div>
+                <div class="cost-item"
+                     :style="(costs.total_quota_errors || 0) > 0 ? 'background:rgba(239,83,80,0.08)' : ''">
+                    <span class="cost-label">429 greške</span>
+                    <span class="cost-value"
+                          :style="(costs.total_quota_errors || 0) > 0 ? 'color:var(--danger)' : ''"
+                          x-text="costs.total_quota_errors || 0"></span>
+                </div>
+                <div class="cost-item">
+                    <span class="cost-label">Uptime</span>
+                    <span class="cost-value" x-text="(costs.uptime_hours || 0).toFixed(1) + 'h'"></span>
+                </div>
+            </div>
+            <template x-if="costs.total_quota_errors > 0">
+                <div class="quota-errors">
+                    <template x-for="(count, svc) in (costs.quota_errors || {})" :key="svc">
+                        <div class="quota-error-row" x-show="count > 0">
+                            <span x-text="svc"></span>
+                            <span class="quota-count" x-text="count + 'x'"></span>
+                            <span class="quota-last" x-text="(costs.quota_errors_last || {})[svc] || ''"></span>
+                        </div>
+                    </template>
+                </div>
+            </template>
+        </div>
+
+        <!-- Rate Limits -->
+        <div class="trace-section">
+            <h3>Rate Limits</h3>
+            <div class="rate-summary">
+                <span>Requests: <strong x-text="systemStatus.rate_limiter?.total_requests || 0"></strong></span>
+                <span>Blocked: <strong x-text="systemStatus.rate_limiter?.blocked_requests || 0"
+                      :style="(systemStatus.rate_limiter?.blocked_requests || 0) > 0 ? 'color:var(--danger)' : ''"></strong></span>
+            </div>
+            <template x-for="(info, svc) in (systemStatus.services || {})" :key="svc">
+                <div class="rate-service">
+                    <span class="svc-name" x-text="svc"></span>
+                    <div class="utilization-bar">
+                        <div class="utilization-fill"
+                             :style="'width:' + (getUtilization(info) * 100) + '%'"
+                             :class="{
+                                 warning: getUtilization(info) > 0.7,
+                                 danger: getUtilization(info) > 0.9
+                             }">
+                        </div>
+                    </div>
+                </div>
+            </template>
+        </div>
+    </aside>
+
+    <!-- COST ANALYSIS TAB OVERLAY -->
+    <div class="cost-tab-overlay" x-show="showCostTab" @click.self="showCostTab = false" x-cloak>
+        <div class="cost-tab-panel">
+            <div class="cost-tab-header">
+                <h2>&#128200; Analiza Troškova &amp; Kvote</h2>
+                <div style="display:flex;align-items:center;">
+                    <button class="cost-refresh-btn" @click="loadStatus()">&#8635; Osvježi</button>
+                    <button class="cost-tab-close" @click="showCostTab = false">&times;</button>
+                </div>
+            </div>
+
+            <!-- Summary cards row -->
+            <div class="cost-summary-bar">
+                <div class="cost-summary-card highlight">
+                    <div class="cs-label">Ukupno (USD)</div>
+                    <div class="cs-value" x-text="'$' + (costs.total_cost_usd || 0).toFixed(4)"></div>
+                    <div class="cs-sub" x-text="'≈ €' + (costs.total_cost_eur || 0).toFixed(4)"></div>
+                </div>
+                <div class="cost-summary-card">
+                    <div class="cs-label">LLM Troškovi</div>
+                    <div class="cs-value" x-text="'$' + (costs.llm?.total_usd || 0).toFixed(4)"></div>
+                    <div class="cs-sub" x-text="(costs.llm?.breakdown?.length || 0) + ' modela'"></div>
+                </div>
+                <div class="cost-summary-card"
+                     :class="(costs.total_quota_errors || 0) > 0 ? 'warn' : ''">
+                    <div class="cs-label">429 Greške</div>
+                    <div class="cs-value" x-text="costs.total_quota_errors || 0"></div>
+                    <div class="cs-sub">RESOURCE_EXHAUSTED</div>
+                </div>
+                <div class="cost-summary-card">
+                    <div class="cs-label">Uptime</div>
+                    <div class="cs-value" x-text="(costs.uptime_hours || 0).toFixed(1) + 'h'"></div>
+                    <div class="cs-sub">od pokretanja servera</div>
+                </div>
+            </div>
+
+            <!-- LLM breakdown table -->
+            <div class="cost-section-title">LLM Modeli (Vertex AI Gemini)</div>
+            <table class="cost-table">
+                <thead>
+                    <tr>
+                        <th>Model</th>
+                        <th>Pozivi</th>
+                        <th>Input tokeni</th>
+                        <th>Output tokeni</th>
+                        <th>Trošak (USD)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <template x-if="!costs.llm?.breakdown?.length">
+                        <tr><td colspan="5" style="color:var(--text-muted);text-align:center;padding:16px;">Nema podataka — pokreni agenta da vidiš troškove</td></tr>
+                    </template>
+                    <template x-for="row in (costs.llm?.breakdown || [])" :key="row.model">
+                        <tr>
+                            <td class="model-name" x-text="row.model"></td>
+                            <td x-text="row.calls"></td>
+                            <td class="tokens-col" x-text="row.input_tokens.toLocaleString()"></td>
+                            <td class="tokens-col" x-text="row.output_tokens.toLocaleString()"></td>
+                            <td class="cost-col" :class="row.cost_usd === 0 ? 'zero' : ''"
+                                x-text="'$' + row.cost_usd.toFixed(4)"></td>
+                        </tr>
+                    </template>
+                    <template x-if="costs.llm?.breakdown?.length">
+                        <tr class="total-row">
+                            <td colspan="4">Ukupno LLM</td>
+                            <td class="cost-col" x-text="'$' + (costs.llm?.total_usd || 0).toFixed(4)"></td>
+                        </tr>
+                    </template>
+                </tbody>
+            </table>
+
+            <!-- Veo / Imagen / TTS table -->
+            <div class="cost-section-title">Generativni Mediji</div>
+            <table class="cost-table">
+                <thead>
+                    <tr>
+                        <th>Servis</th>
+                        <th>Pozivi</th>
+                        <th>Cijena/jed.</th>
+                        <th>Detalji</th>
+                        <th>Trošak (USD)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>Veo 3</strong> (video)</td>
+                        <td x-text="costs.veo?.calls || 0"></td>
+                        <td>$0.40/video</td>
+                        <td class="note-col" x-text="(costs.veo?.calls || 0) + ' × $0.40'"></td>
+                        <td class="cost-col" :class="(costs.veo?.cost_usd || 0) === 0 ? 'zero' : ''"
+                            x-text="'$' + (costs.veo?.cost_usd || 0).toFixed(2)"></td>
+                    </tr>
+                    <tr>
+                        <td><strong>Imagen 3</strong> (slika)</td>
+                        <td x-text="costs.imagen?.calls || 0"></td>
+                        <td>$0.04/slika</td>
+                        <td class="note-col" x-text="(costs.imagen?.calls || 0) + ' × $0.04'"></td>
+                        <td class="cost-col" :class="(costs.imagen?.cost_usd || 0) === 0 ? 'zero' : ''"
+                            x-text="'$' + (costs.imagen?.cost_usd || 0).toFixed(3)"></td>
+                    </tr>
+                    <tr>
+                        <td><strong>Gemini TTS</strong> (govor)</td>
+                        <td x-text="costs.tts?.calls || 0"></td>
+                        <td>preview</td>
+                        <td class="note-col" x-text="(costs.tts?.chars || 0).toLocaleString() + ' znakova — ' + (costs.tts?.note || '')"></td>
+                        <td class="cost-col zero" x-text="'$' + (costs.tts?.cost_usd || 0).toFixed(4) + '*'"></td>
+                    </tr>
+                    <tr class="total-row">
+                        <td colspan="4">Ukupno Mediji</td>
+                        <td class="cost-col"
+                            x-text="'$' + ((costs.veo?.cost_usd || 0) + (costs.imagen?.cost_usd || 0)).toFixed(2)"></td>
+                    </tr>
+                </tbody>
+            </table>
+            <div style="font-size:11px;color:var(--text-muted);margin-top:6px;">
+                * TTS preview — Gemini 2.5 Flash TTS trenutno besplatno, trošak prikazan kao procjena.
+            </div>
+
+            <!-- 429 Errors table -->
+            <div class="cost-section-title" style="margin-top:24px;">
+                429 RESOURCE_EXHAUSTED Greške
+                <span x-show="(costs.total_quota_errors || 0) === 0"
+                      style="color:var(--success);font-size:11px;margin-left:8px;font-weight:400;">
+                    &#10003; Nema grešaka
+                </span>
+            </div>
+            <table class="cost-table quota-table">
+                <thead>
+                    <tr>
+                        <th>Servis / Model</th>
+                        <th>Broj grešaka</th>
+                        <th>Zadnja greška</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <template x-if="!costs.total_quota_errors">
+                        <tr><td colspan="3" style="color:var(--text-muted);text-align:center;padding:14px;">
+                            Nema zabilježenih 429 grešaka od pokretanja servera
+                        </td></tr>
+                    </template>
+                    <template x-for="[svc, count] in Object.entries(costs.quota_errors || {})" :key="svc">
+                        <tr x-show="count > 0">
+                            <td class="model-name" x-text="svc"></td>
+                            <td :class="count > 0 ? 'error-col' : 'zero-col'" x-text="count"></td>
+                            <td class="note-col"
+                                x-text="(costs.quota_errors_last || {})[svc] || '—'"></td>
+                        </tr>
+                    </template>
+                </tbody>
+            </table>
+
+        </div>
+    </div>
+
+    <!-- Image modal (lightbox) -->
+    <div class="image-modal" x-show="imageModal" @click.self="imageModal = null" x-cloak>
+        <img :src="imageModal" x-show="imageModal">
+        <button class="modal-close" @click="imageModal = null">&times;</button>
+    </div>
+
+    <!-- HITL approval modal -->
+    <div class="image-modal" x-show="hitlModal" @click.self="closeHITLModal()" x-cloak
+         style="align-items:center;justify-content:center;">
+        <div style="background:var(--bg-primary,#1a1a2e);border:1px solid var(--warning,#f0a500);
+                    border-radius:8px;padding:24px;max-width:600px;width:95%;max-height:85vh;
+                    overflow-y:auto;box-shadow:0 0 40px rgba(240,165,0,0.2);">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+                <h3 style="margin:0;color:var(--warning,#f0a500);">&#9888; HITL Approval Required</h3>
+                <button @click="closeHITLModal()" style="background:transparent;border:none;font-size:20px;
+                        cursor:pointer;color:var(--text-muted,#888);">&times;</button>
+            </div>
+            <div style="font-size:12px;color:var(--text-muted,#888);margin-bottom:12px;"
+                 x-text="'ID: ' + (hitlModal?.confirmation_id || '') + ' · Session: ' + (hitlModal?.session_id || '')">
+            </div>
+            <!-- Invoice summary card -->
+            <template x-if="hitlModal?.invoice_summary">
+                <div style="background:var(--bg-secondary,#16213e);border-radius:6px;padding:12px;
+                            margin-bottom:12px;font-size:13px;">
+                    <template x-for="[k, v] in Object.entries(hitlModal.invoice_summary || {})" :key="k">
+                        <div style="display:flex;justify-content:space-between;padding:2px 0;">
+                            <span style="color:var(--text-muted,#888);" x-text="k"></span>
+                            <span x-text="v"></span>
+                        </div>
+                    </template>
+                </div>
+            </template>
+            <!-- Full display text (pre-formatted) -->
+            <pre style="background:var(--bg-secondary,#16213e);border-radius:6px;padding:12px;
+                        font-size:11px;white-space:pre-wrap;word-break:break-word;
+                        max-height:300px;overflow-y:auto;margin-bottom:16px;"
+                 x-text="hitlModal?.display_text || 'No details available'"></pre>
+            <!-- Warnings badge -->
+            <template x-if="hitlModal?.has_warnings">
+                <div style="background:rgba(240,165,0,0.15);border:1px solid var(--warning,#f0a500);
+                            border-radius:4px;padding:8px;font-size:12px;margin-bottom:12px;">
+                    &#9888; This invoice has warnings. Review carefully before approving.
+                </div>
+            </template>
+            <!-- Rejection reason input -->
+            <input type="text" x-model="hitlRejectReason"
+                   placeholder="Rejection reason (optional)..."
+                   style="width:100%;padding:8px;margin-bottom:12px;
+                          background:var(--bg-secondary,#16213e);
+                          border:1px solid var(--border,#333);border-radius:4px;
+                          color:inherit;box-sizing:border-box;font-size:13px;">
+            <!-- Action buttons -->
+            <div style="display:flex;gap:8px;">
+                <button @click="approveHITL(hitlModal.confirmation_id)"
+                        style="flex:1;padding:10px;background:var(--success,#4caf50);
+                               border:none;border-radius:4px;cursor:pointer;
+                               font-size:14px;font-weight:600;">
+                    &#10003; Approve &amp; Send
+                </button>
+                <button @click="rejectHITL(hitlModal.confirmation_id)"
+                        style="flex:1;padding:10px;background:var(--danger,#e53e3e);
+                               border:none;border-radius:4px;cursor:pointer;
+                               font-size:14px;font-weight:600;">
+                    &#10007; Reject
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- API Token prompt (shown on 401) -->
+    <div class="image-modal" x-show="showTokenPrompt" x-cloak
+         style="align-items:center;justify-content:center;">
+        <div style="background:var(--bg-primary,#1a1a2e);border:1px solid var(--border,#333);
+                    border-radius:8px;padding:24px;max-width:400px;width:90%;">
+            <h3 style="margin:0 0 12px;">API Token Required</h3>
+            <p style="font-size:13px;color:var(--text-muted,#888);margin:0 0 16px;">
+                Enter your API token to continue. The token is stored in your browser's localStorage.
+            </p>
+            <input id="tokenInput" type="password"
+                   placeholder="Bearer token..."
+                   style="width:100%;padding:8px;margin-bottom:12px;background:var(--bg-secondary,#16213e);
+                          border:1px solid var(--border,#333);border-radius:4px;color:inherit;box-sizing:border-box;"
+                   @keydown.enter="saveToken()">
+            <div style="display:flex;gap:8px;">
+                <button @click="saveToken()"
+                        style="flex:1;padding:8px;background:var(--accent,#4a9eff);
+                               border:none;border-radius:4px;cursor:pointer;">Save Token</button>
+                <button @click="showTokenPrompt = false"
+                        style="padding:8px 16px;background:transparent;border:1px solid var(--border,#333);
+                               border-radius:4px;cursor:pointer;">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/app.js?v=12"></script>
+</body>
+</html>

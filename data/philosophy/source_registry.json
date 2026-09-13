@@ -1,0 +1,281 @@
+[
+  {
+    "source_id": "gutenberg_plato_apology",
+    "enabled": true,
+    "display_name": "Plato - Apology",
+    "source_family": "gutenberg",
+    "adapter": "gutenberg",
+    "canonical_url": "https://www.gutenberg.org/cache/epub/1656/pg1656.txt",
+    "rights_class": "public_domain",
+    "language": "en",
+    "work_title": "Apology",
+    "author": "Plato",
+    "translator": "Benjamin Jowett",
+    "text_type": "dialogue",
+    "authority_level": "primary_source",
+    "citation_style": "Plato, Apology",
+    "persona_affinity": [
+      "socratic_dialogue",
+      "socrates"
+    ],
+    "tags": [
+      "socratic_method",
+      "trial_of_socrates",
+      "virtue",
+      "knowledge"
+    ]
+  },
+  {
+    "source_id": "gutenberg_plato_crito",
+    "enabled": true,
+    "display_name": "Plato - Crito",
+    "source_family": "gutenberg",
+    "adapter": "gutenberg",
+    "canonical_url": "https://www.gutenberg.org/cache/epub/1657/pg1657.txt",
+    "rights_class": "public_domain",
+    "language": "en",
+    "work_title": "Crito",
+    "author": "Plato",
+    "translator": "Benjamin Jowett",
+    "text_type": "dialogue",
+    "authority_level": "primary_source",
+    "citation_style": "Plato, Crito",
+    "persona_affinity": [
+      "socratic_dialogue",
+      "socrates"
+    ],
+    "tags": [
+      "justice",
+      "civil_duty",
+      "socratic_method"
+    ]
+  },
+  {
+    "source_id": "gutenberg_plato_phaedo",
+    "enabled": true,
+    "display_name": "Plato - Phaedo",
+    "source_family": "gutenberg",
+    "adapter": "gutenberg",
+    "canonical_url": "https://www.gutenberg.org/cache/epub/1658/pg1658.txt",
+    "rights_class": "public_domain",
+    "language": "en",
+    "work_title": "Phaedo",
+    "author": "Plato",
+    "translator": "Benjamin Jowett",
+    "text_type": "dialogue",
+    "authority_level": "primary_source",
+    "citation_style": "Plato, Phaedo",
+    "persona_affinity": [
+      "socratic_dialogue",
+      "socrates"
+    ],
+    "tags": [
+      "soul",
+      "immortality",
+      "death",
+      "socratic_method"
+    ]
+  },
+  {
+    "source_id": "gutenberg_plato_meno",
+    "enabled": true,
+    "display_name": "Plato - Meno",
+    "source_family": "gutenberg",
+    "adapter": "gutenberg",
+    "canonical_url": "https://www.gutenberg.org/cache/epub/1643/pg1643.txt",
+    "rights_class": "public_domain",
+    "language": "en",
+    "work_title": "Meno",
+    "author": "Plato",
+    "translator": "Benjamin Jowett",
+    "text_type": "dialogue",
+    "authority_level": "primary_source",
+    "citation_style": "Plato, Meno",
+    "persona_affinity": [
+      "socratic_dialogue",
+      "socrates"
+    ],
+    "tags": [
+      "virtue",
+      "knowledge",
+      "recollection",
+      "socratic_method"
+    ]
+  },
+  {
+    "source_id": "gutenberg_plato_symposium",
+    "enabled": true,
+    "display_name": "Plato - Symposium",
+    "source_family": "gutenberg",
+    "adapter": "gutenberg",
+    "canonical_url": "https://www.gutenberg.org/cache/epub/1600/pg1600.txt",
+    "rights_class": "public_domain",
+    "language": "en",
+    "work_title": "Symposium",
+    "author": "Plato",
+    "translator": "Benjamin Jowett",
+    "text_type": "dialogue",
+    "authority_level": "primary_source",
+    "citation_style": "Plato, Symposium",
+    "persona_affinity": [
+      "socratic_dialogue",
+      "socrates"
+    ],
+    "tags": [
+      "love",
+      "eros",
+      "beauty",
+      "dialogue"
+    ]
+  },
+  {
+    "source_id": "gutenberg_plato_republic",
+    "enabled": true,
+    "display_name": "Plato - The Republic",
+    "source_family": "gutenberg",
+    "adapter": "gutenberg",
+    "canonical_url": "https://www.gutenberg.org/cache/epub/1497/pg1497.txt",
+    "rights_class": "public_domain",
+    "language": "en",
+    "work_title": "The Republic",
+    "author": "Plato",
+    "translator": "Benjamin Jowett",
+    "text_type": "dialogue",
+    "authority_level": "primary_source",
+    "citation_style": "Plato, Republic",
+    "persona_affinity": [
+      "socratic_dialogue",
+      "socrates"
+    ],
+    "tags": [
+      "justice",
+      "ideal_state",
+      "forms",
+      "socratic_method"
+    ]
+  },
+  {
+    "source_id": "gutenberg_aristotle_nicomachean_ethics",
+    "enabled": true,
+    "display_name": "Aristotle - Nicomachean Ethics",
+    "source_family": "gutenberg",
+    "adapter": "gutenberg",
+    "canonical_url": "https://www.gutenberg.org/cache/epub/8438/pg8438.txt",
+    "rights_class": "public_domain",
+    "language": "en",
+    "work_title": "Nicomachean Ethics",
+    "author": "Aristotle",
+    "translator": "D. P. Chase",
+    "text_type": "treatise",
+    "authority_level": "primary_source",
+    "citation_style": "Aristotle, Nicomachean Ethics",
+    "persona_affinity": [
+      "classical_ethics"
+    ],
+    "tags": [
+      "virtue_ethics",
+      "eudaimonia",
+      "practical_wisdom"
+    ]
+  },
+  {
+    "source_id": "gutenberg_burnet_early_greek_philosophy",
+    "enabled": true,
+    "display_name": "Burnet - Early Greek Philosophy",
+    "source_family": "gutenberg",
+    "adapter": "gutenberg",
+    "canonical_url": "https://www.gutenberg.org/cache/epub/67097/pg67097.txt",
+    "rights_class": "public_domain",
+    "language": "en",
+    "work_title": "Early Greek Philosophy",
+    "author": "John Burnet",
+    "translator": null,
+    "text_type": "doxography",
+    "authority_level": "secondary_scholarship",
+    "citation_style": "Burnet, Early Greek Philosophy",
+    "persona_affinity": [
+      "presocratic"
+    ],
+    "tags": [
+      "presocratics",
+      "heraclitus",
+      "parmenides",
+      "pythagoras",
+      "fragments"
+    ]
+  },
+  {
+    "source_id": "gutenberg_epictetus_enchiridion",
+    "enabled": true,
+    "display_name": "Epictetus - Enchiridion",
+    "source_family": "gutenberg",
+    "adapter": "gutenberg",
+    "canonical_url": "https://www.gutenberg.org/cache/epub/45109/pg45109.txt",
+    "rights_class": "public_domain",
+    "language": "en",
+    "work_title": "Enchiridion (Manual)",
+    "author": "Epictetus",
+    "translator": "Thomas Wentworth Higginson",
+    "text_type": "manual",
+    "authority_level": "primary_source",
+    "citation_style": "Epictetus, Enchiridion",
+    "persona_affinity": [
+      "stoicism"
+    ],
+    "tags": [
+      "stoicism",
+      "self_discipline",
+      "virtue"
+    ]
+  },
+  {
+    "source_id": "gutenberg_epictetus_discourses_selection",
+    "enabled": true,
+    "display_name": "Epictetus - Discourses (selection)",
+    "source_family": "gutenberg",
+    "adapter": "gutenberg",
+    "canonical_url": "https://www.gutenberg.org/cache/epub/10661/pg10661.txt",
+    "rights_class": "public_domain",
+    "language": "en",
+    "work_title": "A Selection from the Discourses of Epictetus with the Encheiridion",
+    "author": "Epictetus",
+    "translator": "George Long",
+    "text_type": "treatise",
+    "authority_level": "primary_source",
+    "citation_style": "Epictetus, Discourses (Long selection)",
+    "persona_affinity": [
+      "stoicism"
+    ],
+    "tags": [
+      "stoicism",
+      "free_will",
+      "virtue",
+      "abridged_selection"
+    ]
+  },
+  {
+    "source_id": "gutenberg_marcus_aurelius_meditations",
+    "enabled": true,
+    "display_name": "Marcus Aurelius - Meditations",
+    "source_family": "gutenberg",
+    "adapter": "gutenberg",
+    "canonical_url": "https://www.gutenberg.org/cache/epub/2680/pg2680.txt",
+    "rights_class": "public_domain",
+    "language": "en",
+    "work_title": "Meditations",
+    "author": "Marcus Aurelius",
+    "translator": "Meric Casaubon",
+    "text_type": "meditation",
+    "authority_level": "primary_source",
+    "citation_style": "Marcus Aurelius, Meditations",
+    "persona_affinity": [
+      "stoicism"
+    ],
+    "tags": [
+      "stoicism",
+      "self_reflection",
+      "impermanence",
+      "virtue"
+    ]
+  }
+]

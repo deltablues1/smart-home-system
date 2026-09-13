@@ -1,0 +1,22 @@
+[Unit]
+Description=Jarvis ADK Scheduler (recurring jobs, daily briefing)
+After=network-online.target
+Wants=network-online.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+User=raspberrypijarvis
+WorkingDirectory=/home/raspberrypijarvis/google_claude
+EnvironmentFile=/home/raspberrypijarvis/google_claude/.env
+ExecStart=/home/raspberrypijarvis/google_claude/.venv/bin/python run_scheduler.py --no-cli
+Restart=always
+RestartSec=10
+TimeoutStopSec=30
+
+# Heartbeat is sent only while APScheduler reports running.
+WatchdogSec=180
+NotifyAccess=main
+
+[Install]
+WantedBy=multi-user.target

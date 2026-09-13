@@ -1,0 +1,20 @@
+[Unit]
+Description=Jarvis ADK Web Interface (FastAPI, /api/chat, /api/tts)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# Without User= systemd runs this as root. The other units already run as the
+# jarvis account, and nothing here needs privilege: the API binds 8000, reads
+# the same .env, and talks to Home Assistant and the brokers over the network.
+User=raspberrypijarvis
+WorkingDirectory=/home/raspberrypijarvis/google_claude
+EnvironmentFile=/home/raspberrypijarvis/google_claude/.env
+ExecStartPre=/home/raspberrypijarvis/google_claude/.venv/bin/python scripts/check_oauth_health.py
+ExecStart=/home/raspberrypijarvis/google_claude/.venv/bin/python run_web.py --host 0.0.0.0 --port 8000
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

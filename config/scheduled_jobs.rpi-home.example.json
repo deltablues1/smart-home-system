@@ -1,0 +1,14 @@
+{
+  "jobs": [
+    {
+      "id": "morning-briefing",
+      "name": "Jutarnji pregled",
+      "action_type": "briefing",
+      "agent_request": "dnevni pregled",
+      "trigger": {"type": "cron", "cron_expression": "30 7 * * MON-FRI", "timezone": "Europe/Zagreb"},
+      "enabled": false,
+      "max_retries": 2,
+      "description": "Weekday briefing delivered to Telegram. Disabled in the example."
+    }
+  ]
+}

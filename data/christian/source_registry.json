@@ -1,0 +1,177 @@
+[
+  {
+    "source_id": "gutenberg_douay_rheims_bible",
+    "enabled": true,
+    "display_name": "Douay-Rheims Bible",
+    "source_family": "gutenberg",
+    "adapter": "bible_gutenberg",
+    "canonical_url": "https://www.gutenberg.org/ebooks/8300.txt.utf-8",
+    "rights_class": "public_domain",
+    "language": "en",
+    "work_title": "The Bible, Douay-Rheims",
+    "author": "Douay-Rheims translators",
+    "text_type": "scripture",
+    "authority_level": "high",
+    "citation_style": "{book} {chapter}:{verse_start}-{verse_end}",
+    "persona_affinity": [
+      "scripture",
+      "neutral_catholic",
+      "christian_reflection"
+    ],
+    "tags": [
+      "bible",
+      "scripture",
+      "old_testament",
+      "new_testament"
+    ]
+  },
+  {
+    "source_id": "ccel_augustine_confessions",
+    "enabled": true,
+    "display_name": "Augustine - Confessions",
+    "source_family": "ccel",
+    "adapter": "ccel",
+    "canonical_url": "https://www.ccel.org/ccel/augustine/confess.html",
+    "rights_class": "public_domain",
+    "language": "en",
+    "work_title": "Confessions",
+    "author": "Augustine of Hippo",
+    "text_type": "reflection",
+    "authority_level": "medium",
+    "citation_style": "Augustine, Confessions",
+    "persona_affinity": [
+      "augustine",
+      "christian_reflection"
+    ],
+    "tags": [
+      "conversion",
+      "grace",
+      "restlessness",
+      "sin"
+    ]
+  },
+  {
+    "source_id": "ccel_kempis_imitation",
+    "enabled": true,
+    "display_name": "Thomas a Kempis - Imitation of Christ",
+    "source_family": "ccel",
+    "adapter": "ccel",
+    "canonical_url": "https://www.ccel.org/ccel/kempis/imitation.html",
+    "rights_class": "public_domain",
+    "language": "en",
+    "work_title": "The Imitation of Christ",
+    "author": "Thomas a Kempis",
+    "text_type": "reflection",
+    "authority_level": "medium",
+    "citation_style": "Thomas a Kempis, The Imitation of Christ",
+    "persona_affinity": [
+      "kempis",
+      "christian_reflection"
+    ],
+    "tags": [
+      "humility",
+      "discipleship",
+      "interior_life"
+    ]
+  },
+  {
+    "source_id": "gutenberg_ignatius_spiritual_exercises",
+    "enabled": true,
+    "display_name": "Ignatius - Spiritual Exercises",
+    "source_family": "gutenberg",
+    "adapter": "gutenberg",
+    "canonical_url": "https://www.gutenberg.org/cache/epub/70790/pg70790-images.html",
+    "rights_class": "public_domain",
+    "language": "en",
+    "work_title": "The Spiritual Exercises of St. Ignatius",
+    "author": "Ignatius of Loyola",
+    "text_type": "exercise",
+    "authority_level": "devotional",
+    "citation_style": "Ignatius of Loyola, Spiritual Exercises",
+    "persona_affinity": [
+      "ignatian",
+      "discernment"
+    ],
+    "tags": [
+      "discernment",
+      "examen",
+      "prayer",
+      "meditation"
+    ]
+  },
+  {
+    "source_id": "vatican_catechism",
+    "enabled": true,
+    "display_name": "Catechism of the Catholic Church",
+    "source_family": "vatican",
+    "adapter": "vatican",
+    "canonical_url": "https://www.vatican.va/archive/ENG0015/_INDEX.HTM",
+    "rights_class": "restricted_internal_use",
+    "language": "en",
+    "work_title": "Catechism of the Catholic Church",
+    "author": "Libreria Editrice Vaticana",
+    "text_type": "doctrine",
+    "authority_level": "high",
+    "citation_style": "CCC {paragraph}",
+    "persona_affinity": [
+      "neutral_catholic",
+      "doctrine"
+    ],
+    "tags": [
+      "doctrine",
+      "catechism",
+      "church_teaching"
+    ]
+  },
+  {
+    "source_id": "vatican_compendium_catechism",
+    "enabled": true,
+    "display_name": "Compendium of the Catechism",
+    "source_family": "vatican",
+    "adapter": "vatican",
+    "canonical_url": "https://www.vatican.va/archive/compendium_ccc/documents/archive_2005_compendium-ccc_en.html",
+    "rights_class": "restricted_internal_use",
+    "language": "en",
+    "work_title": "Compendium of the Catechism of the Catholic Church",
+    "author": "Libreria Editrice Vaticana",
+    "text_type": "doctrine",
+    "authority_level": "high",
+    "citation_style": "Compendium of the Catechism",
+    "persona_affinity": [
+      "neutral_catholic",
+      "doctrine"
+    ],
+    "tags": [
+      "doctrine",
+      "catechism",
+      "summary"
+    ]
+  },
+  {
+    "source_id": "vatican_magnifica_humanitas",
+    "enabled": true,
+    "display_name": "Magnifica Humanitas (Leo XIV)",
+    "source_family": "vatican",
+    "adapter": "local_pdf",
+    "local_path": "data/christian/raw/leo_xiv_magnifica_humanitas.pdf",
+    "canonical_url": "data/christian/raw/leo_xiv_magnifica_humanitas.pdf",
+    "rights_class": "restricted_internal_use",
+    "language": "hr",
+    "work_title": "Magnifica Humanitas (Veličanstveno čovještvo)",
+    "author": "Papa Lav XIV.",
+    "text_type": "encyclical",
+    "authority_level": "high",
+    "citation_style": "Magnifica Humanitas, str. {page}",
+    "persona_affinity": [
+      "neutral_catholic",
+      "doctrine",
+      "christian_reflection"
+    ],
+    "tags": [
+      "encyclical",
+      "leo_xiv",
+      "social_teaching",
+      "papal_teaching"
+    ]
+  }
+]
