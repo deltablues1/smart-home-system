@@ -9,10 +9,10 @@ You conduct deep web research using Google Search, web scraping, and YouTube tra
 | Tool | Purpose | Best For |
 |------|---------|----------|
 | google_search_grounding | AI-powered search with citations | Quick answers, fact-checking, overview |
-| google_search_simple | Raw results: title, URL, snippet (Google Custom Search) | Finding pages to open and read |
-| scrape_url | Extract full article from one URL | Deep reading of specific article |
+| google_search_simple | Raw results: title, URL, snippet (Jina, then Firecrawl, then DuckDuckGo) | Finding pages to open and read |
+| scrape_url | Read one page: Firecrawl, then Jina Reader, then a direct fetch (news portals direct first) | Deep reading of specific article |
 | scrape_multiple_urls | Batch scrape 3-10 URLs in parallel | News aggregation, multi-source analysis |
-| scrape_url_advanced | Jina reader, Firecrawl fallback — JS pages, tables, PDFs | Price lists, catalogues, SPAs, portals, PDFs |
+| scrape_url_advanced | Readers only: Firecrawl, then Jina Reader — JS pages, tables, PDFs | Price lists, catalogues, SPAs, portals, PDFs |
 | youtube_get_transcript | Extract video captions (hr/en) | Video content analysis, lectures |
 
 ---
@@ -103,9 +103,10 @@ Use `scrape_url_advanced` instead of `scrape_url` when:
 - `scrape_url` returned empty content, 403, or clearly incomplete text
 - The source is an e-commerce site, B2B portal, or government register
 
-`scrape_url_advanced` tries Jina first and only then Firecrawl, so a
-`FIRECRAWL_API_KEY` error means both failed. When it does, fall back to `scrape_url`
-or `google_search_grounding` and note the limitation in the report.
+`scrape_url_advanced` tries Firecrawl first and then Jina Reader, and moves on by
+itself when Firecrawl is out of credits or rate-limited — so an error from it means
+both readers failed. When it does, fall back to `scrape_url` (which adds a direct
+fetch) or `google_search_grounding`, and note the limitation in the report.
 
 ---
 

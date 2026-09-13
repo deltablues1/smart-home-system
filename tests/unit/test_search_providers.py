@@ -72,10 +72,20 @@ class TestProviderChain:
     def _chain_names(self):
         return [name for name, _ in api._raw_search_providers()]
 
-    def test_order_is_custom_then_jina_then_ddg(self):
+    def test_default_order_is_jina_then_firecrawl_then_ddg(self, monkeypatch):
+        monkeypatch.delenv("SEARCH_PROVIDERS", raising=False)
         assert self._chain_names() == [
-            "custom_search_api", "jina_search", "duckduckgo_search"
+            "jina_search", "firecrawl_search", "duckduckgo_search"
         ]
+
+    def test_custom_search_only_runs_when_asked_for(self, monkeypatch):
+        # Closed to new customers, ends 2027-01-01, and on this project it only
+        # ever answered 403 — a round trip per search for nothing.
+        monkeypatch.delenv("SEARCH_PROVIDERS", raising=False)
+        assert "custom_search_api" not in self._chain_names()
+
+        monkeypatch.setenv("SEARCH_PROVIDERS", "custom_search, jina")
+        assert self._chain_names() == ["custom_search_api", "jina_search"]
 
     @pytest.mark.asyncio
     async def test_the_first_working_provider_wins(self, monkeypatch):

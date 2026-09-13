@@ -92,6 +92,7 @@ voice. → [Architecture](docs/en/architecture.md)
 | Area | Technology |
 |------|------------|
 | Agents | Google ADK 1.31, LiteLLM, Claude Sonnet 5, Gemini 2.5 (Vertex AI RAG) |
+| Research | Jina (search and Reader), Firecrawl, DuckDuckGo, Vertex AI grounding |
 | Voice | openWakeWord, Gemini Transcribe, Google Chirp 2, OpenAI `gpt-4o-mini-tts`, Wyoming protocol |
 | Backend | Python 3.11, FastAPI, APScheduler, python-telegram-bot, Firestore |
 | Smart home | Home Assistant (REST + WebSocket), MQTT (Mosquitto, paho), ESPHome, custom HA integration |
@@ -116,7 +117,7 @@ deploy/home_assistant/   custom integration, dashboard generator, themes, JS mod
 deploy/tv_app_launcher/  Android TV helper app
 esphome/                 ESP32 sensor node and the power-measurement component
 docs/                    documentation in English and Croatian
-tests/unit/              1,486 tests
+tests/unit/              1,526 tests
 ```
 
 ---
@@ -138,7 +139,7 @@ Anthropic and OpenAI. All settings are in [`.env.example`](.env.example).
 
 ### Verification of this snapshot (2026-09-13)
 
-- 1,486 unit tests pass (4 skipped on Windows for Unix-only features).
+- 1,526 unit tests pass (4 skipped on Windows for Unix-only features).
 - The read-only Home Assistant tools were run against the live Home Assistant
   (205 entities, 10 areas): room overview, device history, logbook, energy
   statistics, log and health all answered from real data.

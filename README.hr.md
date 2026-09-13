@@ -98,6 +98,7 @@ Dva Raspberry Pija:
 | Područje | Tehnologija |
 |----------|-------------|
 | Agenti | Google ADK 1.31, LiteLLM, Claude Sonnet 5, Gemini 2.5 (Vertex AI RAG) |
+| Istraživanje | Jina (pretraga i Reader), Firecrawl, DuckDuckGo, Vertex AI grounding |
 | Glas | openWakeWord, Gemini Transcribe, Google Chirp 2, OpenAI `gpt-4o-mini-tts`, Wyoming protokol |
 | Backend | Python 3.11, FastAPI, APScheduler, python-telegram-bot, Firestore |
 | Pametna kuća | Home Assistant (REST + WebSocket), MQTT (Mosquitto, paho), ESPHome, vlastita HA integracija |
@@ -122,7 +123,7 @@ deploy/home_assistant/   vlastita integracija, generator dashboarda, teme, JS mo
 deploy/tv_app_launcher/  pomoćna Android TV aplikacija
 esphome/                 ESP32 senzorski čvor i komponenta za mjerenje snage
 docs/                    dokumentacija na engleskom i hrvatskom
-tests/unit/              1.486 testova
+tests/unit/              1.526 testova
 ```
 
 ---
@@ -144,7 +145,7 @@ OpenAI. Sve postavke su u [`.env.example`](.env.example).
 
 ### Provjera ove snimke (2026-09-13)
 
-- Prolazi 1.486 unit testova (4 preskočena na Windowsu jer su samo za Unix).
+- Prolazi 1.526 unit testova (4 preskočena na Windowsu jer su samo za Unix).
 - Alati samo za čitanje iz Home Assistanta isprobani su na živom Home
   Assistantu (205 entiteta, 10 prostorija): pregled po sobama, povijest
   uređaja, logbook, statistika potrošnje, log i zdravlje sustava odgovorili su

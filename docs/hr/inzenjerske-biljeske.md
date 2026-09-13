@@ -125,6 +125,35 @@ petlja ponovno šalje kontekst.
 
 ---
 
+## Researcher nije vidio cijenu
+
+**2026-09-13.** Sirova pretraga iza researchera od 3. rujna vraćala je 403, a
+stranice koje je ipak našao stizale su bez jedinog broja po koji je poslan.
+
+**Što je bilo krivo.** Dvije stvari. Google Custom Search, planirani izvor
+sirovih rezultata, odbijao je projekt porukom „does not have the access". Pokazalo
+se da je taj JSON API zatvoren za nove korisnike i da se gasi 1. 1. 2027. Stranice
+je pak čitao izravni dohvat parsiran BeautifulSoupom. Na tri stranice trgovina
+vratio je 138, 54 i 1.095 riječi, a cijenu ni na jednoj, jer se Jina kao rezerva
+palila tek ispod 50 riječi. Uz to je provjera HEAD/GET prije skupnog dohvata
+trgovine koje blokiraju botove označavala nevažećima, pa ih nijedan čitač nije
+ni vidio.
+
+**Što se promijenilo.**
+- Pretraga pita Jinu, zatim Firecrawl, zatim DuckDuckGo. Custom Search se
+  uključuje samo izričito. Na Piju je Firecrawl odgovarao za 0,9–1,4 s, a Jina
+  za 1,7–4,4 s, s istim rezultatima. Firecrawl ipak troši kredite, pa je drugi.
+- Stranice čita Firecrawl, zatim Jina Reader, zatim izravni dohvat. Portali s
+  vijestima zadržavaju svoje selektore i idu izravno prvi. Potrošeni krediti
+  (HTTP 402) ili ograničenje brzine (429) znače samo prelazak na sljedećeg.
+- Oba redoslijeda su u `.env` (`SEARCH_PROVIDERS`, `SCRAPE_PROVIDERS`). Firecrawl
+  se zove preko REST API-ja, jer se SDK razlikovao između laptopa i Pija.
+
+**Pouka.** Broj riječi nije sadržaj. Čitač izmjeri na stranicama koje stvarno
+trebaš, za podatak koji stvarno trebaš.
+
+---
+
 ## Wake word koji je ogluhnuo
 
 **2026-07-12.** Šest pokušaja zaredom bez reakcije.

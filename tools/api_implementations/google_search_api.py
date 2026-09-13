@@ -2,8 +2,10 @@
 Google Search API Implementation
 
 Implements two search strategies:
-1. Vertex AI Grounding (primary) - uses Gemini's built-in search grounding
-2. Google Custom Search API (fallback) - uses Programmable Search Engine
+1. Vertex AI Grounding - an AI-written answer with cited sources
+2. Raw results (google_search_simple) - title, URL and snippet per hit, from
+   Jina, Firecrawl or DuckDuckGo (search_providers.py); Google Custom Search
+   only when SEARCH_PROVIDERS names it
 
 Automatic fallback: If Vertex AI returns 429 (quota exceeded), falls back to Custom Search.
 """
@@ -371,27 +373,49 @@ async def google_custom_search(
         }
 
 
-def _raw_search_providers():
-    """Providers that return a list of pages, best first.
+_DEFAULT_SEARCH_ORDER = ("jina_search", "firecrawl_search", "duckduckgo_search")
 
-    Custom Search when it is configured, Jina when there is a key, and
-    DuckDuckGo — which needs neither — as the one that always answers. Anything
-    unconfigured reports an error and the chain moves on, so adding a key later
-    is enough to promote a provider without touching code.
+_SEARCH_ALIASES = {
+    "jina": "jina_search",
+    "firecrawl": "firecrawl_search",
+    "duckduckgo": "duckduckgo_search",
+    "ddg": "duckduckgo_search",
+    "custom_search": "custom_search_api",
+    "google": "custom_search_api",
+}
+
+
+def _raw_search_providers():
+    """Providers that return a list of pages, in the order SEARCH_PROVIDERS names.
+
+    Default: Jina (free with a key), Firecrawl (fast, but every search spends
+    credits page reading needs more), DuckDuckGo (needs nothing, a parsed page —
+    the safety net). Anything unconfigured or out of credits reports an error and
+    the chain moves on.
+
+    Custom Search is no longer in the default order: Google closed the JSON API
+    to new customers and it ends on 2027-01-01, and on this project it only ever
+    answered 403. It stays available as ``custom_search`` for a project that
+    still has access.
     """
     from tools.api_implementations.search_providers import (
         duckduckgo_search,
+        firecrawl_search,
         jina_search,
+        provider_order,
     )
 
     async def _custom(query, num_results, locale):
         return await google_custom_search(query, num_results=num_results, locale=locale)
 
-    return [
-        ("custom_search_api", _custom),
-        ("jina_search", jina_search),
-        ("duckduckgo_search", duckduckgo_search),
-    ]
+    available = {
+        "custom_search_api": _custom,
+        "jina_search": jina_search,
+        "firecrawl_search": firecrawl_search,
+        "duckduckgo_search": duckduckgo_search,
+    }
+    order = provider_order("SEARCH_PROVIDERS", _DEFAULT_SEARCH_ORDER, available, _SEARCH_ALIASES)
+    return [(name, available[name]) for name in order]
 
 
 async def google_search_simple(
@@ -402,13 +426,15 @@ async def google_search_simple(
     """
     Web search returning raw results: one title, URL and snippet per hit.
 
-    Goes straight to the Custom Search API. It deliberately does NOT call
-    google_search_grounding: grounding returns a single AI-written summary, and
-    a researcher handed a summary here has nothing left to open and read. Use
-    google_search_grounding for a quick overview, this for sources to scrape.
+    Asks the raw search providers in turn (Jina, Firecrawl, DuckDuckGo by
+    default; see _raw_search_providers). It deliberately does NOT call
+    google_search_grounding first: grounding returns a single AI-written
+    summary, and a researcher handed a summary here has nothing left to open and
+    read. Use google_search_grounding for a quick overview, this for sources to
+    scrape.
 
-    Falls back to grounding only when Custom Search is not configured, and says
-    so in `search_method` and `warning` rather than pretending these are raw hits.
+    Falls back to grounding only when every raw provider failed, and says so in
+    `search_method` and `warning` rather than pretending these are raw hits.
 
     Args:
         credentials: Google Cloud credentials (not used, kept for API consistency)
@@ -510,7 +536,7 @@ def register_google_search_tools(tool_registry) -> None:
     tool_registry.register_tool(
         name="google_search_simple",
         function=google_search_simple,
-        description="Web search returning raw results (title, URL, snippet) via Google Custom Search. Use this to find pages to open; use google_search_grounding for a quick AI overview.",
+        description="Web search returning raw results (title, URL, snippet) via Jina, Firecrawl or DuckDuckGo, whichever answers first. Use this to find pages to open; use google_search_grounding for a quick AI overview.",
         parameters={
             "type": "object",
             "properties": {
@@ -554,16 +580,12 @@ def register_google_search_tools(tool_registry) -> None:
         auth_type="api_key"
     )
 
-    # Log configuration status
+    # Custom Search is opt-in now (SEARCH_PROVIDERS=custom_search,...), so a
+    # missing CX is not worth a warning on every start.
     cx = _custom_search_cx()
     if cx and _custom_search_api_key():
         logger.info(f"Custom Search API configured (cx: {cx[:8]}...)")
     elif cx:
-        logger.warning(
-            "GOOGLE_CUSTOM_SEARCH_CX is set but no Custom Search API key is — "
-            "google_search_simple will fall back to grounding citations"
-        )
-    else:
-        logger.warning("GOOGLE_CUSTOM_SEARCH_CX not set - Custom Search unavailable")
+        logger.info("GOOGLE_CUSTOM_SEARCH_CX is set but no Custom Search API key is")
 
     logger.info("Google Search tools registered successfully")

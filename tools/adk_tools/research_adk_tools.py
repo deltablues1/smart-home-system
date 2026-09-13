@@ -4,10 +4,11 @@ Research ADK Tools
 ADK-compatible wrappers for Research tools:
 - Google Search Grounding (Vertex AI)
 - YouTube Transcript extraction
-- Web Scraping (BeautifulSoup)
+- Web Scraping (Firecrawl, Jina Reader, BeautifulSoup)
 
-All tools are FREE and require NO external API keys!
-Uses Vertex AI credentials from environment.
+Grounding uses Vertex AI credentials from environment. Raw search and page
+reading use JINA_API_KEY and FIRECRAWL_API_KEY when set, and degrade to
+DuckDuckGo and a direct fetch without them.
 """
 
 import logging
@@ -132,8 +133,9 @@ async def scrape_url(
     """
     Scrape content from a URL.
 
-    Optimized for Croatian news portals (index.hr, jutarnji.hr, 24sata.hr, vecernji.hr).
-    Extracts article text, titles, and links using intelligent parsing.
+    Articles are read by Firecrawl, then Jina Reader, then a direct fetch —
+    the first real page wins. Croatian news portals (index.hr, jutarnji.hr,
+    24sata.hr, vecernji.hr) are parsed directly first; 'links' is direct only.
 
     Best for: reading full articles, extracting detailed content, analyzing news.
 
@@ -205,12 +207,12 @@ async def scrape_url_advanced(
     Advanced web scraping with automatic fallback chain. Handles JavaScript-rendered
     pages, tables, price lists, PDF documents, and sites that block standard scrapers.
 
-    Tries in order:
-    1. Jina Reader (free, no API key) — fast, works for most pages
-    2. Firecrawl (requires FIRECRAWL_API_KEY) — for complex/protected pages
+    Tries in order (SCRAPE_PROVIDERS, readers only):
+    1. Firecrawl — main content only; moves on by itself when out of credits
+    2. Jina Reader — clean markdown of the whole page
 
-    Use when: scrape_url fails or returns empty/403, page uses React/Vue/AJAX,
-    need to extract tables or price lists, target is a PDF from a web URL.
+    Use when: the page is a price list, catalogue, table, PDF or JavaScript app,
+    or scrape_url returned empty or clearly incomplete text.
 
     Args:
         url: URL to scrape
@@ -220,17 +222,9 @@ async def scrape_url_advanced(
         Dictionary with content, word_count, url, source, success flag
     """
     try:
-        from tools.api_implementations.web_scraper_api import scrape_url_jina, scrape_url_firecrawl
+        from tools.api_implementations.web_scraper_api import scrape_url_with_readers
 
-        # 1. Try Jina Reader first (free, no API key)
-        result = await scrape_url_jina(None, url)
-        if result.get("success"):
-            return _cap_scraped(result)
-
-        logger.info(f"Jina Reader failed for {url}, trying Firecrawl: {result.get('error')}")
-
-        # 2. Fall back to Firecrawl
-        result = await scrape_url_firecrawl(None, url, only_main_content=only_main_content)
+        result = await scrape_url_with_readers(url, only_main_content=only_main_content)
         return _cap_scraped(result)
 
     except Exception as e:
@@ -245,10 +239,11 @@ async def scrape_multiple_urls(
     skip_invalid: bool = True
 ) -> dict:
     """
-    Scrape multiple URLs in parallel with smart validation.
+    Scrape multiple URLs in parallel, each read like scrape_url.
 
-    **NEW FEATURE**: Pre-validates URLs before scraping to skip 404s/broken links,
-    saving time and improving success rate.
+    When the direct fetch leads (extract_type other than 'article'), URLs are
+    probed first to skip 404s/broken links; readers fetch pages themselves, so
+    article batches are not probed.
 
     Efficient for processing search results or news aggregation.
     Handles failures gracefully - returns partial results if some URLs fail.

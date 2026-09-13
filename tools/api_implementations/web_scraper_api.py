@@ -1,8 +1,10 @@
 """
 Web Scraper API Implementation
 
-Real implementation for web scraping using BeautifulSoup and requests
-Optimized for Croatian news portals (index.hr, jutarnji.hr, 24sata.hr, etc.)
+A page is read by the first provider that returns a real page: Firecrawl, then
+Jina Reader, then a direct fetch parsed with BeautifulSoup (SCRAPE_PROVIDERS).
+The direct pass keeps its selectors for Croatian news portals (index.hr,
+jutarnji.hr, 24sata.hr, etc.), which it reads first.
 """
 
 import logging
@@ -119,6 +121,105 @@ async def validate_url(url: str, timeout: int = 5) -> Dict[str, Any]:
         return {"valid": False, "status_code": None, "error": str(e)}
 
 
+# Who reads a page, in order. Measured 2026-09-13 on three shop pages: the
+# direct BeautifulSoup pass came back with 138, 54 and 1,095 words and not one
+# price (the Jina fallback only fired below 50 words), while Firecrawl and Jina
+# Reader both found the prices, Firecrawl with the main content only. So a
+# reader leads. Firecrawl spends a credit per page (free plan: 1,000 a month);
+# when they run out it answers 402 and Jina takes over by itself.
+SCRAPE_PROVIDER_NAMES = ("firecrawl", "jina", "direct")
+_DEFAULT_SCRAPE_ORDER = ("firecrawl", "jina", "direct")
+_SCRAPE_ALIASES = {"jina_reader": "jina", "bs4": "direct", "beautifulsoup": "direct"}
+
+# Below this a page is taken for a shell (a JS app, a cookie wall) and the next
+# provider gets a turn. If nobody does better, the fullest thin page still wins.
+_MIN_USEFUL_WORDS = 50
+
+
+def scrape_provider_order() -> List[str]:
+    """SCRAPE_PROVIDERS, e.g. ``firecrawl,jina,direct`` (the default)."""
+    from tools.api_implementations.search_providers import provider_order
+
+    return provider_order(
+        "SCRAPE_PROVIDERS", _DEFAULT_SCRAPE_ORDER, SCRAPE_PROVIDER_NAMES, _SCRAPE_ALIASES
+    )
+
+
+def _portal_domain(url: str) -> Optional[str]:
+    try:
+        domain = urlparse(url).netloc.replace('www.', '')
+    except ValueError:
+        return None
+    return domain if domain in CROATIAN_NEWS_PORTALS else None
+
+
+def _scrape_order_for(url: str, extract_type: str, return_html: bool = False) -> List[str]:
+    if extract_type == "links" or return_html:
+        # A reader returns page text, not the link list or the markup asked for.
+        return ["direct"]
+    order = scrape_provider_order()
+    if extract_type != "article" or _portal_domain(url):
+        # The portal selectors know these pages and cost nothing, and a reader's
+        # markdown is not quite what all_text asks for: the direct pass leads
+        # and a reader only rescues a thin page.
+        order = ["direct"] + [name for name in order if name != "direct"]
+    return order
+
+
+async def _scrape_in_order(
+    url: str,
+    order: List[str],
+    extract_type: str = "article",
+    return_html: bool = False,
+    validate_first: bool = True,
+    only_main_content: bool = True,
+) -> Dict[str, Any]:
+    """Ask each provider in turn; the first real page wins."""
+    tried = []
+    best = None
+    status_code = None
+
+    for name in order:
+        if name == "direct":
+            result = await _scrape_direct(url, extract_type, return_html, validate_first)
+        elif name == "firecrawl":
+            result = await scrape_url_firecrawl(None, url, only_main_content=only_main_content)
+        else:
+            result = await scrape_url_jina(None, url)
+
+        if not isinstance(result, dict) or result.get("error") or result.get("success") is False:
+            error = result.get("error") if isinstance(result, dict) else str(result)
+            if isinstance(result, dict) and result.get("status_code"):
+                status_code = result["status_code"]
+            tried.append(f"{name}: {error}")
+            logger.info("Scrape provider %s failed for %s: %s", name, url, error)
+            continue
+
+        words = result.get("word_count") or 0
+        if extract_type == "links" or return_html or words >= _MIN_USEFUL_WORDS:
+            return result
+        tried.append(f"{name}: only {words} words")
+        logger.info("Scrape provider %s returned a thin page for %s (%s words)", name, url, words)
+        if best is None or words > (best.get("word_count") or 0):
+            best = result
+
+    # A thin page after the site said the page is gone is the site's error
+    # page, not a short article.
+    if best is not None and status_code not in (404, 410):
+        return best
+
+    failure = {
+        "error": "; ".join(tried) or "no scrape provider configured",
+        "url": url,
+        "text": None,
+        "success": False,
+        "providers_tried": tried,
+    }
+    if status_code:
+        failure["status_code"] = status_code
+    return failure
+
+
 async def scrape_url(
     credentials,
     url: str,
@@ -127,12 +228,13 @@ async def scrape_url(
     validate_first: bool = True
 ) -> Dict[str, Any]:
     """
-    Scrape content from a URL using BeautifulSoup
+    Scrape content from a URL.
 
-    Optimized for:
-    - Croatian news portals (index.hr, jutarnji.hr, 24sata.hr, etc.)
-    - General web pages
-    - Article extraction
+    Article pages go through SCRAPE_PROVIDERS in order — Firecrawl, Jina Reader,
+    then the direct BeautifulSoup pass by default — and the first one that
+    returns a real page wins, so a shop that needs JavaScript or blocks plain
+    requests is still read. Croatian news portals and extract_type="all_text"
+    go direct first; "links" and return_html go direct only.
 
     Args:
         credentials: Not used (kept for consistency)
@@ -142,17 +244,13 @@ async def scrape_url(
             - "all_text": Extract all text from page
             - "links": Extract all links
         return_html: Return raw HTML as well (default: False)
-        validate_first: Validate URL accessibility before scraping (default: True)
+        validate_first: Probe the URL before the direct pass (default: True)
 
     Returns:
-        Dictionary with:
-        - url: Original URL
-        - title: Page/article title
-        - text: Extracted text content
-        - word_count: Number of words
-        - links: List of links (if extract_type="links")
-        - html: Raw HTML (if return_html=True)
-        - portal: Detected portal name (if Croatian news portal)
+        From a reader: url, title (Firecrawl), content, word_count, source, success.
+        From the direct pass: url, title, text, word_count, portal, extract_type,
+        source, plus links/link_count or html when asked.
+        On failure: error, url, text=None, providers_tried.
 
     Example:
         result = await scrape_url(
@@ -160,6 +258,26 @@ async def scrape_url(
             url="https://www.index.hr/vijesti/..."
         )
     """
+    order = _scrape_order_for(url, extract_type, return_html)
+    return await _scrape_in_order(
+        url, order, extract_type=extract_type, return_html=return_html,
+        validate_first=validate_first,
+    )
+
+
+async def scrape_url_with_readers(url: str, only_main_content: bool = True) -> Dict[str, Any]:
+    """Readers only: Firecrawl, then Jina Reader (their SCRAPE_PROVIDERS order)."""
+    order = [name for name in scrape_provider_order() if name != "direct"] or ["firecrawl", "jina"]
+    return await _scrape_in_order(url, order, only_main_content=only_main_content)
+
+
+async def _scrape_direct(
+    url: str,
+    extract_type: str = "article",
+    return_html: bool = False,
+    validate_first: bool = True
+) -> Dict[str, Any]:
+    """The direct pass: fetch the page here and parse it with BeautifulSoup."""
     try:
         # Import required libraries
         try:
@@ -289,7 +407,8 @@ async def scrape_url(
             "text": text_content,
             "word_count": word_count,
             "portal": domain if portal_config else None,
-            "extract_type": extract_type
+            "extract_type": extract_type,
+            "source": "direct",
         }
 
         if extract_type == "links":
@@ -301,14 +420,9 @@ async def scrape_url(
 
         logger.info(f"Scraping completed: {word_count} words extracted from {url}")
 
-        # If too few words extracted, webshop is likely JS-rendered — auto-fallback to Jina Reader
-        if word_count < 50:
-            logger.info(f"Too few words ({word_count}) from {url} — trying Jina Reader fallback")
-            jina_result = await scrape_url_jina(None, url)
-            if jina_result.get("success") and jina_result.get("word_count", 0) > word_count:
-                logger.info(f"Jina Reader fallback successful: {jina_result['word_count']} words from {url}")
-                return jina_result
-
+        # A thin page is no longer rescued here: _scrape_in_order hands it to
+        # the next provider. This one used to call Jina for "links" too, whose
+        # "Found N links" is always under 50 words, and swap the list for text.
         return result
 
     except requests.exceptions.Timeout:
@@ -373,11 +487,17 @@ async def scrape_multiple_urls(
     try:
         logger.info(f"Scraping {len(urls)} URLs in parallel")
 
-        # Pre-validate all URLs if requested
+        # Pre-validate all URLs if requested — but only when the direct pass
+        # leads. The HEAD/GET probe is exactly what webshops block, so it marked
+        # them invalid and skipped them before Firecrawl or Jina, which fetch the
+        # page themselves, ever saw them.
         valid_urls = []
         invalid_urls = []
 
-        if validate_first and skip_invalid:
+        readers_lead = extract_type == "article" and scrape_provider_order()[0] != "direct"
+        probe = validate_first and skip_invalid and not readers_lead
+
+        if probe:
             logger.info(f"Pre-validating {len(urls)} URLs...")
             validation_tasks = [validate_url(url) for url in urls]
             validations = await asyncio.gather(*validation_tasks, return_exceptions=True)
@@ -416,7 +536,7 @@ async def scrape_multiple_urls(
         # Format results
         output = {
             "total_urls": len(urls),
-            "validated": len(invalid_urls) if validate_first and skip_invalid else 0,
+            "validated": len(invalid_urls) if probe else 0,
             "successful": 0,
             "failed": len(invalid_urls),
             "results": invalid_urls.copy()  # Start with invalid URLs
@@ -448,6 +568,9 @@ async def scrape_multiple_urls(
             "successful": 0,
             "failed": len(urls)
         }
+
+
+_JINA_TARGET_ERROR = re.compile(r"^Warning: Target URL returned error (\d{3})", re.MULTILINE)
 
 
 async def scrape_url_jina(
@@ -488,6 +611,15 @@ async def scrape_url_jina(
         if resp.status_code != 200:
             return {"error": f"Jina Reader returned HTTP {resp.status_code}", "url": url, "success": False}
         content = resp.text.strip()
+        # Jina answers 200 even when the target did not. The target's status is
+        # a "Warning:" line above the content, and the content is the site's own
+        # error page — measured 2026-09-13: a shop's 404 came back as 49 words
+        # and was reported as a page read.
+        target_error = _JINA_TARGET_ERROR.search(content[:2000])
+        if target_error and int(target_error.group(1)) >= 400:
+            status = int(target_error.group(1))
+            return {"error": f"HTTP {status} (via Jina Reader)", "url": url,
+                    "status_code": status, "success": False}
         if not content or len(content) < 100:
             return {"error": "Jina Reader returned empty or too-short content", "url": url, "success": False}
         logger.info(f"Jina Reader scraped {url}: {len(content.split())} words")
@@ -516,7 +648,9 @@ async def scrape_url_firecrawl(
     Use when: standard scrape_url fails, page is a SPA/AJAX portal, need to extract
     tables or price lists, or target is a PDF linked from a web page.
 
-    Requires FIRECRAWL_API_KEY environment variable.
+    Requires FIRECRAWL_API_KEY environment variable. Each page costs a credit;
+    out of credits (402) or rate-limited (429) comes back as an error, which
+    the scrape chain treats as "next provider".
 
     Args:
         credentials: Not used, included for API compatibility
@@ -525,60 +659,75 @@ async def scrape_url_firecrawl(
         only_main_content: Strip nav/header/footer (default: True)
 
     Returns:
-        Dictionary with content, word_count, url, source, success flag
+        Dictionary with title, content, word_count, url, source, success flag
     """
-    import os
-    api_key = os.getenv("FIRECRAWL_API_KEY")
+    from tools.api_implementations.search_providers import (
+        firecrawl_api_key,
+        firecrawl_error,
+        firecrawl_post,
+    )
+
+    api_key = firecrawl_api_key()
     if not api_key:
         logger.warning("FIRECRAWL_API_KEY not set — cannot use Firecrawl scraper")
         return {"error": "FIRECRAWL_API_KEY not set in environment", "url": url, "success": False}
+
+    payload = {
+        "url": url,
+        "formats": formats or ["markdown"],
+        "onlyMainContent": only_main_content,
+        "timeout": _FIRECRAWL_TIMEOUT_MS,
+        # The API serves a cached copy up to two days old by default. The
+        # researcher writes today's date next to every price it reads, so the
+        # page has to be at most this old.
+        "maxAge": _FIRECRAWL_MAX_AGE_MS,
+    }
     try:
-        # firecrawl-py 4.x moved the scraping API onto the v1 compatibility class;
-        # FirecrawlApp there only exposes paper/GitHub search and parse(). Older
-        # 0.x/1.x releases keep scrape_url on FirecrawlApp itself.
-        try:
-            from firecrawl import V1FirecrawlApp as _FirecrawlClient
-        except ImportError:
-            from firecrawl import FirecrawlApp as _FirecrawlClient
-
-        app = _FirecrawlClient(api_key=api_key)
-
-        def _scrape():
-            # 4.x takes only_main_content, older releases took onlyMainContent.
-            try:
-                return app.scrape_url(
-                    url,
-                    formats=formats or ["markdown"],
-                    only_main_content=only_main_content,
-                )
-            except TypeError:
-                return app.scrape_url(
-                    url,
-                    formats=formats or ["markdown"],
-                    onlyMainContent=only_main_content,
-                )
-
-        # scrape_url is blocking. Awaiting it directly would stall the event loop
-        # that also serves Telegram, voice and the Home Assistant agent, for as
-        # long as the remote page takes.
-        result = await asyncio.to_thread(_scrape)
-
-        content = (
-            getattr(result, "markdown", None)
-            or (result.get("markdown") if isinstance(result, dict) else None)
-            or str(result)
+        status, body = await firecrawl_post(
+            "/v2/scrape", payload, api_key, timeout_seconds=_FIRECRAWL_TIMEOUT_MS / 1000 + 10
         )
-        logger.info(f"Firecrawl scraped {url}: {len(content.split())} words")
+        if status != 200:
+            error = firecrawl_error(status, body)
+            logger.warning(f"Firecrawl scrape failed for {url}: {error}")
+            return {"error": error, "url": url, "success": False}
+        if body.get("success") is False:
+            return {"error": f"Firecrawl: {body.get('error')}", "url": url, "success": False}
+
+        data = body.get("data") or {}
+        metadata = data.get("metadata") or {}
+        page_status = metadata.get("statusCode")
+        if isinstance(page_status, int) and page_status >= 400:
+            # Firecrawl fetched it, but what it fetched is the site's error or
+            # block page, not the page.
+            return {
+                "error": f"HTTP {page_status} (via Firecrawl)",
+                "url": url,
+                "status_code": page_status,
+                "success": False,
+            }
+
+        content = (data.get("markdown") or data.get("summary") or data.get("html") or "").strip()
+        if not content:
+            return {"error": "Firecrawl returned no content", "url": url, "success": False}
+
+        word_count = len(content.split())
+        logger.info(f"Firecrawl scraped {url}: {word_count} words")
         return {
             "url": url,
+            "title": metadata.get("title"),
             "content": content,
-            "word_count": len(content.split()),
+            "word_count": word_count,
             "source": "firecrawl",
             "success": True
         }
     except Exception as e:
         logger.error(f"Firecrawl scrape failed for {url}: {e}")
-        return {"error": str(e), "url": url, "success": False}
+        # A timeout stringifies to "", which would read as no error at all.
+        return {"error": str(e) or type(e).__name__, "url": url, "success": False}
+
+
+_FIRECRAWL_TIMEOUT_MS = 30_000
+_FIRECRAWL_MAX_AGE_MS = 3_600_000
 
 
 def register_web_scraper_tools(tool_registry) -> None:

@@ -4,7 +4,7 @@ The researcher's prompt must describe the tools it actually has.
 Every drift here cost real research quality: the tool table promised
 google_search_simple returned raw URLs while the code returned an AI summary,
 and Rule 5 told the model to expect a FIRECRAWL_API_KEY error from a scraper
-that tries Jina first. A model cannot plan around tools that are described
+that tried Jina first. A model cannot plan around tools that are described
 wrongly, so these are pinned.
 
 Run with:
@@ -23,13 +23,16 @@ PROMPT = (
 class TestToolDescriptionsMatchImplementation:
     def test_simple_search_is_not_sold_as_an_ai_summary(self):
         row = next(l for l in PROMPT.splitlines() if l.startswith("| google_search_simple"))
-        assert "Custom Search" in row
+        assert "Jina" in row and "Firecrawl" in row
+        assert "Custom Search" not in row
         assert "snippet" in row.lower()
 
-    def test_advanced_scraper_names_jina_first(self):
+    def test_advanced_scraper_names_its_readers_in_order(self):
         row = next(l for l in PROMPT.splitlines() if l.startswith("| scrape_url_advanced"))
-        assert "Jina" in row
-        assert "Jina" in PROMPT.split("### Rule 5")[1].split("### Rule 6")[0]
+        assert row.index("Firecrawl") < row.index("Jina")
+        rule5 = PROMPT.split("### Rule 5")[1].split("### Rule 6")[0]
+        assert "Firecrawl first" in rule5
+        assert "out of credits" in rule5
 
 
 class TestPriceMode:

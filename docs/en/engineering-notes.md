@@ -115,6 +115,36 @@ times its loop re-sends the context.
 
 ---
 
+## The researcher could not see a price
+
+**2026-09-13.** The raw search behind the researcher had answered 403 since
+2026-09-03, and the pages it did find came back without the one number it had
+been sent for.
+
+**What was wrong.** Two things. Google Custom Search, the planned source of raw
+results, refused the project with "does not have the access" — and the JSON API
+turned out to be closed to new customers altogether (it shuts down on
+2027-01-01). And pages were read by a direct fetch parsed with BeautifulSoup: on
+three shop pages it returned 138, 54 and 1,095 words and no price on any of
+them, because the Jina fallback only fired below 50 words. Before a batch, a
+HEAD/GET probe also marked bot-shy shops invalid, so no reader ever saw them.
+
+**What changed.**
+- Search asks Jina, then Firecrawl, then DuckDuckGo; Custom Search is opt-in.
+  Measured on the Pi, Firecrawl answered in 0.9–1.4 s and Jina in 1.7–4.4 s
+  with the same hits, but Firecrawl spends credits, so it goes second.
+- Pages are read by Firecrawl, then Jina Reader, then the direct fetch; news
+  portals keep their selectors and go direct first. Out of credits (HTTP 402)
+  or rate-limited (429) simply means the next provider.
+- Both orders live in `.env` (`SEARCH_PROVIDERS`, `SCRAPE_PROVIDERS`). Firecrawl
+  is called over its REST API, because the SDK's surface differed between the
+  laptop and the Pi.
+
+**Lesson.** Word count is not content. Measure a reader on the pages you
+actually need, for the number you actually need.
+
+---
+
 ## The wake word that went deaf
 
 **2026-07-12.** Six attempts in a row, no reaction.
