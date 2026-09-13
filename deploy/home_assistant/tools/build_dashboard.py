@@ -179,12 +179,17 @@ POWER = [
     (P_GROUND, "Prizemlje"),
 ]
 
-# Energy, as Riemann sums of the three power sensors (HA integration helpers,
-# created 2026-09-12). They count from zero at that moment and only ever rise,
-# which is exactly what a meter reading is compared against.
+# Energy. House and upstairs are Riemann sums of their power sensors (HA
+# integration helpers, created 2026-09-12); they count from zero at that moment
+# and only ever rise, which is exactly what a meter reading is compared against.
+# The ground floor is house minus upstairs (a template helper, 2026-09-13), not
+# a sum of the ground-floor power: that power is a difference of two channels
+# read ~1.3 s apart and used to swing negative, and its own integral had lost
+# 0.02 kWh in half a day. The old helper, ..._potrosnja_prizemlje, still runs
+# alongside as a cross-check.
 E_HOUSE = "sensor.bme280_mux_node_potrosnja_kuca"
 E_UPSTAIRS = "sensor.bme280_mux_node_potrosnja_kat"
-E_GROUND = "sensor.bme280_mux_node_potrosnja_prizemlje"
+E_GROUND = "sensor.bme280_mux_node_potrosnja_prizemlje_razlika"
 
 ENERGY = [
     (E_HOUSE, "Kuća"),

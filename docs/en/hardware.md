@@ -81,6 +81,17 @@ batches.
 - The incomer clamp measures the whole house, the second clamp the upstairs
   feed; the ground floor is published as the difference of **real power only**
   — RMS current and apparent power are not additive across feeds.
+- The two channels are read in turn, ~1.3 s apart, so a plain subtraction put
+  the ground floor at −835 W whenever the pulsing induction hob switched between
+  two readings. Each upstairs reading is now paired with the mean of the house
+  readings either side of it, pairs with a load jump in between are skipped,
+  four pairs are averaged, and the result is clamped at zero. Ground-floor
+  energy is house minus upstairs energy, so the floors always add up to the
+  house.
+- The same 1800 W kettle run upstairs moved the house by 1772 W and the upstairs
+  clamp by 1809 W. The upstairs channel read 2 % high, so its calibration was
+  scaled by 0.980 to match the incomer; the absolute scale is set on the house
+  against the utility meter.
 - Energy totals also integrate on the ESP32 itself, so a Wi-Fi drop or a
   reflash does not leave a hole in the day.
 

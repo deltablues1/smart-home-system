@@ -138,7 +138,13 @@ phase_power:
   # SCT-013-000 is 100 A : 50 mA (2000:1), so A-per-volt = 2000 / burden.
   # 47 ohm burden -> 42.553 A/V, full scale ~49.7 A against the 3.3 V rail.
   # Both channels must use the same burden value so one phase correction fits.
-  current_calibration: 42.553
+  # 42.553 is this channel's nominal value; 41.70 = 42.553 x 0.980. The same
+  # 1800 W kettle run upstairs on 2026-09-13 moved the house 1772 W and this
+  # channel 1809 W (0.980; the induction hob gave 0.978, twenty morning steps
+  # 0.981), so upstairs read 2 % high against the incomer and the ground floor
+  # went negative under every big upstairs load. This matches the channel to
+  # the house; the absolute scale is settled on the house against the meter.
+  current_calibration: 41.70
   # ADS #1 (SCT) ALERT/RDY -> GPIO33; ADS #2 (ZMPT) ALERT/RDY -> GPIO32.
   # ESP32 internal pull-ups are enabled by the pin modes below.
   current_rdy_pin:
@@ -172,6 +178,9 @@ phase_power:
     name: "Kat stvarna snaga"
     id: p_kat
     accuracy_decimals: 1
+    on_value:
+      then:
+        - lambda: id(kat_since_house) = x;
   apparent_power:
     name: "Kat prividna snaga"
     accuracy_decimals: 1
@@ -198,12 +207,36 @@ phase_power:
       name: "Kuca ukupno stvarna snaga"
       id: p_ukupno
       accuracy_decimals: 1
+      on_value:
+        then:
+          - lambda: |-
+              // Pair the upstairs reading taken since the last house reading
+              // with the mean of the house readings either side of it. A house
+              // jump means something switched inside the window and the
+              // upstairs reading may sit on either side of it: skip that pair.
+              const float before = id(house_before_kat), upstairs = id(kat_since_house);
+              if (!std::isnan(before) && !std::isnan(upstairs) && std::fabs(x - before) < 150.0f)
+                id(p_prizemlje_raw).publish_state((before + x) / 2.0f - upstairs);
+              id(house_before_kat) = x;
+              id(kat_since_house) = NAN;
     apparent_power:
       name: "Kuca ukupno prividna snaga"
       accuracy_decimals: 1
     power_factor:
       name: "Kuca ukupno faktor snage"
       accuracy_decimals: 3
+
+# Scratch values for pairing the two alternating power channels; see
+# "Prizemlje stvarna snaga".
+globals:
+  - id: house_before_kat
+    type: float
+    restore_value: no
+    initial_value: 'NAN'
+  - id: kat_since_house
+    type: float
+    restore_value: no
+    initial_value: 'NAN'
 
 sensor:
   # Ground floor is not its own clamp: it is what the house draws minus what
@@ -215,25 +248,36 @@ sensor:
   # NOT additive - two 5 A loads at different power factors do not draw 10 A
   # from the incomer - so there is deliberately no "Prizemlje struja" here.
   #
-  # The two channels alternate about once a second, so the two states are up to
-  # ~1 s apart. A large load switching on can make the difference dip negative
-  # for one reading; that is the sampling skew, not a measurement fault, and it
-  # is left visible rather than clamped to zero so a real calibration error
-  # (a persistent negative) stays findable.
+  # The channels are read in turn (~1.3 s each), so the latest house and
+  # upstairs readings are never from the same moment. Subtracting them straight
+  # put the ground floor at -835 W whenever the pulsing induction hob switched
+  # between the two (2026-09-13). Now each upstairs reading is paired with the
+  # mean of the house readings either side of it (in p_ukupno's on_value),
+  # pairs with a house jump in between are skipped, four pairs are averaged
+  # (~10 s), and what is left is clamped at zero: a floor cannot draw negative
+  # power. The persistent minus that pointed at a calibration error was fixed
+  # at its source (current_calibration above). Ground-floor ENERGY does not
+  # come from this sensor; it is house minus upstairs energy, below.
   - platform: template
+    id: p_prizemlje_raw
+    internal: true
+    unit_of_measurement: "W"
+    accuracy_decimals: 1
+    update_interval: never
+
+  - platform: copy
+    source_id: p_prizemlje_raw
     name: "Prizemlje stvarna snaga"
     id: p_prizemlje
     unit_of_measurement: "W"
     device_class: power
     state_class: measurement
     accuracy_decimals: 1
-    update_interval: 5s
-    lambda: |-
-      if (!id(p_ukupno).has_state() || !id(p_kat).has_state())
-        return {};
-      if (isnan(id(p_ukupno).state) || isnan(id(p_kat).state))
-        return {};
-      return id(p_ukupno).state - id(p_kat).state;
+    filters:
+      - sliding_window_moving_average:
+          window_size: 4
+          send_every: 2
+      - lambda: return std::max(x, 0.0f);
 
   # Energy counted on the node itself, not only in Home Assistant.
   #
@@ -246,6 +290,7 @@ sensor:
   # reset. Together: the helpers give the long total, these survive an outage.
   - platform: total_daily_energy
     name: "Kuca ukupno dnevno"
+    id: e_kuca_dnevno
     power_id: p_ukupno
     unit_of_measurement: kWh
     accuracy_decimals: 3
@@ -254,19 +299,37 @@ sensor:
 
   - platform: total_daily_energy
     name: "Kat dnevno"
+    id: e_kat_dnevno
     power_id: p_kat
     unit_of_measurement: kWh
     accuracy_decimals: 3
     filters:
       - multiply: 0.001
 
-  - platform: total_daily_energy
+  # House minus upstairs, not an integral of the ground-floor power: that way
+  # upstairs + ground always add up to the house and the zero clamp above
+  # cannot inflate it. The two counters update ~1 s apart, so the difference
+  # can wobble by a fraction of a Wh; it is held at the day's highest value so
+  # the counter never runs backwards, and released when the house counter
+  # restarts at local midnight.
+  - platform: template
     name: "Prizemlje dnevno"
-    power_id: p_prizemlje
     unit_of_measurement: kWh
+    device_class: energy
+    state_class: total_increasing
     accuracy_decimals: 3
-    filters:
-      - multiply: 0.001
+    update_interval: 30s
+    lambda: |-
+      const float house = id(e_kuca_dnevno).state, upstairs = id(e_kat_dnevno).state;
+      if (std::isnan(house) || std::isnan(upstairs))
+        return {};
+      static float held = 0.0f, last_house = 0.0f;
+      if (house < last_house)
+        held = 0.0f;
+      last_house = house;
+      if (house - upstairs > held)
+        held = house - upstairs;
+      return held;
 
   # Differential voltage between SCT SIGNAL (A0) and VBIAS (A1).
   # RMS current from SCT-013-000 (100 A : 50 mA) with a 100 ohm burden.

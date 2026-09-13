@@ -73,6 +73,8 @@ ROOM_BY_SUFFIX = {
     "potrosnja_kuca": "kuca",
     "potrosnja_kat": "kuca",
     "potrosnja_prizemlje": "kuca",
+    # House minus upstairs (template helper, 2026-09-13) - what the panel shows.
+    "potrosnja_prizemlje_razlika": "kuca",
     "bme280_mux_uptime": "kuca",
     "bme280_mux_wifi_signal": "kuca",
     # --- lights ---

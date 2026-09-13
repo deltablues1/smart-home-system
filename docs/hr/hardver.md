@@ -86,6 +86,17 @@ Raspodjela mjerenja:
 - Kliješta na glavnom dovodu mjere cijelu kuću, a druga kliješta dovod kata.
 - Prizemlje se objavljuje kao razlika **samo radne snage**. Efektivna struja i
   prividna snaga ne zbrajaju se preko dovoda.
+- Dva kanala čitaju se naizmjence, u razmaku od ~1,3 s. Obično oduzimanje zato je
+  prizemlje spuštalo na −835 W svaki put kad je indukcijska ploča uključila ili
+  isključila grijanje između dva očitanja. Sada se svako očitanje kata uparuje s
+  prosjekom očitanja kuće prije i poslije njega. Parovi sa skokom potrošnje
+  između njih se preskaču, četiri para se uprosječe, a rezultat ne može biti
+  ispod nule. Energija prizemlja je energija kuće minus energija kata, pa se
+  katovi uvijek zbrajaju u kuću.
+- Isto kuhalo od 1800 W uključeno na katu pomaknulo je kuću za 1772 W, a
+  kliješta kata za 1809 W. Kanal kata čitao je 2 % previše, pa mu je kalibracija
+  pomnožena s 0,980 da odgovara glavnom dovodu. Apsolutnu skalu određuje kuća,
+  prema brojilu.
 - Potrošnja se integrira i na samom ESP32, pa pad Wi-Fija ili ponovno flashanje
   ne ostavi rupu u danu.
 
